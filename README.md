@@ -24,6 +24,19 @@ to submit software build + publish jobs as `sbatch` scripts.
 Most of the login implemented in `samctr` is derived from the
 `eessi_container.sh` script authored by Thomas Roeblitz[^4].
 
+## Installation
+
+
+### samctr
+```
+go install github.com/asc-ac-at/sam/cmd/samctr@latest
+```
+
+### crtar
+
+```
+go install github.com/asc-ac-at/sam/cmd/crtar@latest
+```
 ## Examples
 
 ### config.yaml
