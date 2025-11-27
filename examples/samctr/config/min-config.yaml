@@ -1,0 +1,13 @@
+image: "docker://ghcr.io/eessi/build-node:debian12"
+
+host_injections: /opt/adm/eessi
+
+fusemounts:
+  - type: "container"
+    fuse_cmd: "cvmfs2"
+    fuse_arg: "cvmfs-config.cern.ch"
+    ctr_mountpoint: "/cvmfs/cvmfs-config.cern.ch"
+  - type: "container"
+    fuse_cmd: "cvmfs2"
+    fuse_arg: "software.eessi.io"
+    ctr_mountpoint: "/cvmfs/software.eessi.io"
