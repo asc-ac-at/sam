@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package samctr
 
@@ -25,7 +25,7 @@ func Runner(prg string, argFmt func(rs *RuntimeState) []string, runtime *Runtime
 	// Q: we're hardcoding "apptainer" below, maybe we should make this more
 	// generic in the future?
 	cmd := exec.CommandContext(ctx, prg, args...)
-	cmd.Env = runtime.Environ
+	cmd.Env = append(os.Environ(), runtime.Environ...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -44,7 +44,7 @@ func RunSystemShell(runtime *RuntimeState, argFmt func(rs *RuntimeState) string)
 	defer cancel()
 	// be careful to quote the arg ... some opts may contain literal quotes
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", fmt.Sprintf(`'%s'`, arg))
-	cmd.Env = runtime.Environ
+	cmd.Env = append(os.Environ(), runtime.Environ...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
