@@ -24,7 +24,7 @@ func ApptainerExecArg(rs *RuntimeState) string {
 	bindmounts := isamctr.BindMountsApptainerFmt(rs.AllBindMounts)
 
 	prg := strings.Join(rs.ArgsAfterDash, " ")
-	arg := fmt.Sprintf(`'apptainer exec --cleanenv %s %s %s %s'`, fusemounts, bindmounts, rs.ContainerSif, prg)
+	arg := fmt.Sprintf(`'apptainer exec %s %s %s %s'`, fusemounts, bindmounts, rs.ContainerSif, prg)
 
 	return arg
 }

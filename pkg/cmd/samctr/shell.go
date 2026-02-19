@@ -23,7 +23,7 @@ func ApptainerShellArg(rs *RuntimeState) string {
 
 	bindmounts := isamctr.BindMountsApptainerFmt(rs.AllBindMounts)
 	extraOpts := strings.Join(rs.ApptainerCmdOpts, " ")
-	arg := fmt.Sprintf(`'apptainer shell --cleanenv %s %s %s %s'`, fusemounts, bindmounts, extraOpts, rs.ContainerSif)
+	arg := fmt.Sprintf(`'apptainer shell %s %s %s %s'`, fusemounts, bindmounts, extraOpts, rs.ContainerSif)
 	log.Printf("AtpptainerShellArg: %s", arg)
 	return arg
 }
@@ -39,7 +39,7 @@ This will prepare a command to execute Apptainer shell with the desired configur
 	Run: func(cmd *cobra.Command, args []string) {
 
 		if ToStdout {
-			fmt.Printf("/bin/sh -c apptainer %s\n", ApptainerShellArg(Runtime))
+			fmt.Printf("/bin/sh -c %s\n", ApptainerShellArg(Runtime))
 			return
 		} else {
 			RunSystemShell(Runtime, ApptainerShellArg)
