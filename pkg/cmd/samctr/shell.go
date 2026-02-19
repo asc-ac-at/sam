@@ -39,7 +39,7 @@ This will prepare a command to execute Apptainer shell with the desired configur
 	Run: func(cmd *cobra.Command, args []string) {
 
 		if ToStdout {
-			fmt.Printf("/bin/sh -c apptainer %s\n", ApptainerShellArg(Runtime))
+			fmt.Printf("/bin/sh -c %s\n", ApptainerShellArg(Runtime))
 			return
 		} else {
 			RunSystemShell(Runtime, ApptainerShellArg)
