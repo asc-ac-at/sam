@@ -37,7 +37,7 @@ func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) ([]str
 
 	lockFile, lferr := acquireLockfile(tarball)
 	if lferr != nil {
-		return nil, fmt.Errorf("could not acquire lockfile %s: %w", lockFile.Name(), lferr)
+		return nil, fmt.Errorf("could not acquire lockfile: %w", lferr)
 	}
 	stdout, err := runCmd("tar", args)
 	if err != nil {
