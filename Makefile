@@ -1,6 +1,6 @@
 
 SAMCTR_VERSION := 0.0.6
-CRTAR_VERSION := 0.0.2
+CRTAR_VERSION := 0.0.3
 SAMGX_VERSION := 0.0.1
 
 all: samctr build_crtar
