@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package crtar
 
@@ -86,15 +86,15 @@ func acquireLockfile(tarballPath string) (*os.File, error) {
 	log.Printf("acquireLockfile find or create -> %s", lockFilePath)
 
 	if _, err := os.Stat(lockFilePath); err == nil { // lockfile found!
-		return nil, fmt.Errorf("lockfile %s already present %w", lockFilePath, err)
-	} else {
-		result, err := os.Create(lockFilePath)
-		log.Printf("aquireLockfile created -> %s\n", result.Name())
-		if err != nil {
-			return nil, fmt.Errorf("acquireLockfile failed to create %s: %w", lockFilePath, err)
-		}
-		return result, nil
+		return nil, fmt.Errorf("lockfile %s already present", lockFilePath)
 	}
+
+	result, err := os.Create(lockFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("acquireLockfile failed to create %s: %w", lockFilePath, err)
+	}
+	log.Printf("aquireLockfile created -> %s\n", result.Name())
+	return result, nil
 }
 
 func removeLockfile(lockFile *os.File) error {
