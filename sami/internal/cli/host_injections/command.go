@@ -1,0 +1,29 @@
+/*
+Copyright © 2026 Adam McCartney <adam.mccartney@tuwien.ac.at>
+*/
+package host_injections
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+func NewCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hostInjections",
+		Short: "Build software for site specific install",
+		Long: `This will build and optionally install software into 'host_injections' path.
+
+host_injections is a special location defined during the configuration
+of a client to use EESSI. Typically, you run this command on a compute
+node of a HPC system to install software specific to that site.
+
+More info: https://www.eessi.io/docs/site_specific_config/host_injections/#the-host_injections-variant-symlink
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("hostInjections called")
+		},
+	}
+	return cmd
+}
