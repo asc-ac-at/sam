@@ -1,0 +1,24 @@
+stages:
+  - test
+
+variables:
+  GOFLAGS: "-mod=mod"
+
+test:
+  stage: test
+  image: golang:1.25.0
+  script:
+    - go vet ./...
+    - go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        paths: [coverage.txt]
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache/go-build
+      - .cache/gocachedir/
+      - go.mod
+      - go.sum
