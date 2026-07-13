@@ -3,24 +3,44 @@ Package logging provides logging directory setup for build commands.
 
 The logging directory structure follows the pattern from the sami PoC:
 
-	{base_path}/logs/{USER}/{YYYYMMDD}/sami.XXXXXXX.{SW_NAME}-{TOOLCHAIN}/
+	{base_path}/logs/{USER}/{YYYYMMDD}/sami.XXXXXXX.{SW_NAME}/
 
 Where:
   - base_path: Configurable base path (default: /opt/adm/asc-software-stack)
   - USER: Current system user
   - YYYYMMDD: Current date
   - XXXXXXX: Random characters for uniqueness
-  - SW_NAME, TOOLCHAIN: Provided by caller
+  - SW_NAME: Provided by caller
 */
 package logging
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/user"
 	"path/filepath"
 	"time"
 )
+
+type BuildLogPaths struct {
+	BuildLog string
+	GitRepo  string
+	BuildCmd string
+}
+
+func NewBuildLogPaths(basePath, swName string) *BuildLogPaths {
+	bld, err := SetupLoggingDir(basePath, swName)
+	if err != nil {
+		log.Fatalf("Errror could not setup Logging: %s", err)
+	}
+	res := &BuildLogPaths{
+		BuildLog: bld,
+		GitRepo:  filepath.Clean(fmt.Sprintf("%s/asc-software-layer", bld)),
+		BuildCmd: filepath.Clean(fmt.Sprintf("%s/build_cmd.sh", bld)),
+	}
+	return res
+}
 
 // DefaultBasePath is the default base path for logging directories
 const DefaultBasePath = "/opt/adm/asc-software-stack"
@@ -30,7 +50,6 @@ const DefaultBasePath = "/opt/adm/asc-software-stack"
 // Parameters:
 //   - basePath: Base path for logs (e.g., /opt/adm/asc-software-stack)
 //   - swName: Software name being built (e.g., buildenv-nvhpc-25.9)
-//   - toolchain: Toolchain identifier (e.g., nvidia-nvhpc-25.9)
 //
 // Returns:
 //   - string: Full path to the created logging directory
@@ -38,9 +57,9 @@ const DefaultBasePath = "/opt/adm/asc-software-stack"
 //
 // Example:
 //
-//	logDir, err := SetupLoggingDir("/opt/adm/asc-software-stack", "buildenv-nvhpc-25.9", "nvidia-nvhpc-25.9")
-//	// Returns: /opt/adm/asc-software-stack/logs/<user>/<date>/sami.XXXXXXX.buildenv-nvhpc-25.9-nvidia-nvhpc-25.9
-func SetupLoggingDir(basePath, swName, toolchain string) (string, error) {
+//	logDir, err := SetupLoggingDir("/opt/adm/asc-software-stack", "buildenv-nvhpc-25.9")
+//	// Returns: /opt/adm/asc-software-stack/logs/<user>/<date>/sami.XXXXXXX.buildenv-nvhpc-25.9
+func SetupLoggingDir(basePath, swName string) (string, error) {
 	// Get current user
 	currentUser, err := user.Current()
 	if err != nil {
@@ -59,8 +78,8 @@ func SetupLoggingDir(basePath, swName, toolchain string) (string, error) {
 		return "", fmt.Errorf("failed to create parent directory %s: %w", logParent, err)
 	}
 
-	// Create unique temp directory with pattern: sami.XXXXXXX.{SW_NAME}-{TOOLCHAIN}
-	logDir, err := os.MkdirTemp(logParent, fmt.Sprintf("sami.*.%s-%s", swName, toolchain))
+	// Create unique temp directory with pattern: sami.XXXXXXX.{SW_NAME}
+	logDir, err := os.MkdirTemp(logParent, fmt.Sprintf("sami.*.%s", swName))
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
@@ -74,12 +93,11 @@ func SetupLoggingDir(basePath, swName, toolchain string) (string, error) {
 // Parameters:
 //   - basePath: Base path for logs
 //   - swName: Software name being built
-//   - toolchain: Toolchain identifier
 //
 // Returns:
 //   - string: The path where the log directory would be created
 //   - error: Any error encountered (e.g., getting current user)
-func GenerateLogPath(basePath, swName, toolchain string) (string, error) {
+func GenerateLogPath(basePath, swName string) (string, error) {
 	// Get current user
 	currentUser, err := user.Current()
 	if err != nil {

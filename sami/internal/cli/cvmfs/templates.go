@@ -72,6 +72,7 @@ eb -r --easystack ${stack_file}
 
 func renderBuildCmd(tmpl string, data *CvmfsBuildCmdData) error {
 	t := template.Must(template.New("CvmfsBuildCmd").Parse(tmpl))
+	// TODO: adapt this to write to an open file
 	err := t.Execute(os.Stdout, data)
 	return err
 }
