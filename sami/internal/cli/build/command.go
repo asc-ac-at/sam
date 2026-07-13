@@ -4,14 +4,15 @@ Copyright © 2026 Adam McCartney <adam.mccartney@tuwien.ac.at>
 package build
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/cvmfs"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/host_injections"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
 func NewCommand() *cobra.Command {
+	opts := shared.NewOptions()
+
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "",
@@ -22,17 +23,16 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cpuMarch, _ := cmd.Flags().GetString("cpu")
-			fmt.Printf("build for %s\n", cpuMarch)
+
 			return nil
 		},
 		TraverseChildren: true,
 	}
 
-	cmd.AddCommand(cvmfs.NewCommand())
-	cmd.AddCommand(host_injections.NewCommand())
+	shared.RegisterFlags(cmd, opts)
 
-	registerFlags(cmd)
+	cmd.AddCommand(cvmfs.NewCommand(opts))
+	cmd.AddCommand(host_injections.NewCommand(opts))
 
 	return cmd
 }

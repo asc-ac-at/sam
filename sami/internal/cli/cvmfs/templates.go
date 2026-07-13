@@ -5,13 +5,14 @@ import (
 	"html/template"
 	"os"
 	"time"
+
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
 type CvmfsBuildCmdData struct {
-	CpuMarch   string
-	GpuMarch   string
-	SwsVariant string
-	GitBranch  string
+	CPU        string
+	GPU        string
+	SWSVariant string
 	GitRepo    string
 	Easystack  string
 	Publish    bool
@@ -27,14 +28,17 @@ func timestamp() string {
 	return fmt.Sprint(t.Format("20060102150405"))
 }
 
-func NewCvmfsBuildCmdData() *CvmfsBuildCmdData {
+func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 	cmdData := &CvmfsBuildCmdData{
-		Publish:   false,
-		GitRepo:   "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
-		CvmfsRepo: "/cvmfs/software.asc.ac.at",
-		Template:  buildCmdTmpl,
-		Name:      "my-software",
-		Timestamp: timestamp(),
+		CPU:        opts.CPU,
+		GPU:        opts.GPU,
+		SWSVariant: opts.SWSVariant,
+		GitRepo:    "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
+		Publish:    false,
+		CvmfsRepo:  "/cvmfs/software.asc.ac.at",
+		Template:   buildCmdTmpl,
+		Name:       "my-software",
+		Timestamp:  timestamp(),
 	}
 	return cmdData
 }
@@ -51,13 +55,13 @@ source {{ .LmodInit }}
 export EESSI_PROJECT_INSTALL={{ .CvmfsRepo }}
 
 ml --force purge
-ml load "EESSI/{{ .SwsVariant }}" "ASC/{{ .SwsVariant }}" \
-    && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SwsVariant }} ASC/{{ .SwsVariant }}\n"
+ml load "EESSI/{{ .SWSVariant }}" "ASC/{{ .SWSVariant }}" \
+    && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SWSVariant }} ASC/{{ .SWSVariant }}\n"
 
 {{if .Publish}}
 eb -r --easystack ${stack_file}
 if [[ "$?" -eq 0 ]]; then
-    crtar -EESSI-version {{ .SwsVariant }} -name "{{ .Name }}-{{ .Timestamp }}"
+    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}-{{ .Timestamp }}"
 else
     cp -a /tmp/ ${LOGDIR}/ctr-tmp
 fi

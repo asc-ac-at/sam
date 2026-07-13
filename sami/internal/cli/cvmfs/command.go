@@ -8,9 +8,15 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
-func NewCommand() *cobra.Command {
+var (
+	ctrTool string
+	publish bool
+)
+
+func NewCommand(opts *shared.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cvmfs",
 		Short: "Build software to publish on cvmfs repository",
@@ -19,13 +25,25 @@ func NewCommand() *cobra.Command {
 Typically you run this command when you want to publish software to a
 cvmfs repository. The configuration of the build environment is specified
 by the container tool e.g: samctr.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			buildCmdData, err := registerFlags(cmd)
-			if err != nil {
-				log.Println("error preprocessing")
-				return err
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if opts.GitBranch != "" && opts.GitCommit != "" {
+				return fmt.Errorf("--gitBranch and --gitCommit are mutually exclusive")
 			}
-			err = renderBuildCmd(buildCmdTmpl, buildCmdData)
+			if opts.GitBranch != "" && opts.GitMergeReqID != 0 {
+				return fmt.Errorf("--gitBranch and --gitMergeRequestId are mutually exclusive")
+			}
+			if opts.GitCommit != "" && opts.GitMergeReqID != 0 {
+				return fmt.Errorf("--gitCommit and --gitMergeRequestId are mutually exclusive")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			shared.RegisterFlags(cmd, opts)
+			data := NewCvmfsBuildCmdData(opts)
+			publish, _ := cmd.Flags().GetBool("publish")
+			data.Publish = publish
+
+			err := renderBuildCmd(buildCmdTmpl, data)
 			if err != nil {
 				log.Println(fmt.Errorf("%w", err))
 				return err
