@@ -6,10 +6,11 @@ package cvmfs
 import (
 	"fmt"
 	"log"
+	"log/slog"
 
 	"github.com/spf13/cobra"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 )
 
 var (
@@ -17,7 +18,7 @@ var (
 	publish bool
 )
 
-func NewCommand(opts *shared.Options) *cobra.Command {
+func NewCommand(opts *shared.Options, logger *slog.Logger) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cvmfs",
 		Short: "Build software to publish on cvmfs repository",
@@ -28,16 +29,16 @@ cvmfs repository. The configuration of the build environment is specified
 by the container tool e.g: samctr.`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Name == "" {
-				return fmt.Errorf("--name is required")
+				logger.Error("--name is required")
 			}
 			if opts.GitBranch != "" && opts.GitCommit != "" {
-				return fmt.Errorf("--gitBranch and --gitCommit are mutually exclusive")
+				logger.Error("--gitBranch and --gitCommit are mutually exclusive")
 			}
 			if opts.GitBranch != "" && opts.GitMergeReqID != 0 {
-				return fmt.Errorf("--gitBranch and --gitMergeRequestId are mutually exclusive")
+				logger.Error("--gitBranch and --gitMergeRequestId are mutually exclusive")
 			}
 			if opts.GitCommit != "" && opts.GitMergeReqID != 0 {
-				return fmt.Errorf("--gitCommit and --gitMergeRequestId are mutually exclusive")
+				logger.Error("--gitCommit and --gitMergeRequestId are mutually exclusive")
 			}
 			return nil
 		},
@@ -47,15 +48,19 @@ by the container tool e.g: samctr.`,
 			data.Publish = publish
 
 			// 1. setup logging
-			blp := logging.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
+			blp, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
+			if err != nil {
+				logger.Error(fmt.Sprintf("cvmfs %s", err))
+				return err
+			}
 			log.Printf("git repo: %s\n", blp.GitRepo)
 			log.Printf("build cmd: %s\n", blp.BuildCmd)
 
 			// 2. setup git
 			// 3. render build cmd
-			err := renderBuildCmd(buildCmdTmpl, data)
+			err = renderBuildCmd(buildCmdTmpl, data)
 			if err != nil {
-				log.Println(fmt.Errorf("%w", err))
+				logger.Error(fmt.Sprintf("cvmfs %s", err))
 				return err
 			}
 			// 4. select build runner

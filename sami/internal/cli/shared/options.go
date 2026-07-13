@@ -13,6 +13,7 @@ type Options struct {
 	SWSVariant       string `flag:"sws-variant" default:"2025.06"`
 	Name             string `flag:"name"`
 	BuildLogBasePath string `flag:"log-basepath" default:"/opt/adm/asc-software-stack"`
+	Verbose          bool   `flag:"verbose" default:"false"`
 }
 
 func NewOptions() *Options {
@@ -35,6 +36,7 @@ func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
 	cmd.PersistentFlags().StringVarP(&opts.SWSVariant, "sws-variant", "s", opts.SWSVariant, "Software stack variant")
 	cmd.PersistentFlags().StringVarP(&opts.Name, "name", "n", opts.Name, "Name for the software build")
 	cmd.PersistentFlags().StringVar(&opts.BuildLogBasePath, "log-basepath", opts.BuildLogBasePath, "Sets the base of the build log directory tree")
+	cmd.PersistentFlags().BoolVar(&opts.Verbose, "verbose", opts.Verbose, "Enable verbose logging")
 
 	return opts
 }
