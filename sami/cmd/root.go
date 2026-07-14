@@ -5,7 +5,7 @@ Copyright © 2026 Adam McCartney
 package cmd
 
 import (
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -27,20 +27,21 @@ Created for use at the Austrian Scientific Computing (ASC) Research Center.`,
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func Execute(logger *slog.Logger) {
+
+	rootCmd.AddCommand(build.NewCommand(logger))
+
 	err := rootCmd.Execute()
 	if err != nil {
-		log.Println(err)
+		logger.Error("execution failed", "error", err)
 		os.Exit(1)
 	}
 }
 
 func init() {
-	rootCmd.AddCommand(build.NewCommand())
-
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.sami.git.yaml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	//rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
