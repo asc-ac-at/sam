@@ -5,10 +5,12 @@ package cvmfs
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/spf13/cobra"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/command/git"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 )
 
@@ -33,10 +35,10 @@ by the container tool e.g: samctr.`,
 			if opts.GitBranch != "" && opts.GitCommit != "" {
 				return errors.New("--gitBranch and --gitCommit are mutually exclusive")
 			}
-			if opts.GitBranch != "" && opts.GitMergeReqID != 0 {
+			if opts.GitBranch != "" && opts.GitMergeReqId != 0 {
 				return errors.New("--gitBranch and --gitMergeRequestId are mutually exclusive")
 			}
-			if opts.GitCommit != "" && opts.GitMergeReqID != 0 {
+			if opts.GitCommit != "" && opts.GitMergeReqId != 0 {
 				return errors.New("--gitCommit and --gitMergeRequestId are mutually exclusive")
 			}
 			return nil
@@ -47,14 +49,19 @@ by the container tool e.g: samctr.`,
 			data.Publish = publish
 
 			// 1. setup logging
-			_, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
+			bldPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
 			if err != nil {
 				return err
 			}
 
-			// 2. setup git
+			// 2. git stuff (technical term)
+			if err := git.SetupGit(opts, bldPath, logger); err != nil {
+				return err
+			}
+
 			// 3. render build cmd
-			err = renderBuildCmd(buildCmdTmpl, data)
+			err = renderBuildCmd(buildCmdTmpl, data, bldPath.BuildCmd)
+			logger.Debug(fmt.Sprintf("rendered build command to: %s", bldPath.BuildCmd))
 			if err != nil {
 				return err
 			}

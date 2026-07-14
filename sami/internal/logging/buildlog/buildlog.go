@@ -25,9 +25,9 @@ import (
 // A BuildLogPaths object contains a directory tree used to store essential information about a
 // software build.
 type BuildLogPaths struct {
-	BuildLog string
-	GitRepo  string
-	BuildCmd string
+	BuildLog    string
+	GitRepoPath string
+	BuildCmd    string
 }
 
 func NewBuildLogPaths(basePath, swName string) (*BuildLogPaths, error) {
@@ -36,9 +36,9 @@ func NewBuildLogPaths(basePath, swName string) (*BuildLogPaths, error) {
 		return nil, err
 	}
 	res := &BuildLogPaths{
-		BuildLog: bld,
-		GitRepo:  filepath.Clean(fmt.Sprintf("%s/asc-software-layer", bld)),
-		BuildCmd: filepath.Clean(fmt.Sprintf("%s/build_cmd.sh", bld)),
+		BuildLog:    bld,
+		GitRepoPath: filepath.Clean(fmt.Sprintf("%s/asc-software-layer", bld)),
+		BuildCmd:    filepath.Clean(fmt.Sprintf("%s/build_cmd.sh", bld)),
 	}
 	return res, nil
 }

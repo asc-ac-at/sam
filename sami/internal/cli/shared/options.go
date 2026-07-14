@@ -9,7 +9,7 @@ type Options struct {
 	GitBranch        string
 	GitCommit        string
 	GitRepo          string `flag:"git-repo" default:"https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer"`
-	GitMergeReqID    int    `flag:"git-mr-id" default:"0"`
+	GitMergeReqId    int    `flag:"git-mr-id" default:"0"`
 	SWSVariant       string `flag:"sws-variant" default:"2025.06"`
 	Name             string `flag:"name"`
 	BuildLogBasePath string `flag:"log-basepath" default:"/opt/adm/asc-software-stack"`
@@ -32,7 +32,7 @@ func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
 	cmd.PersistentFlags().StringVar(&opts.GitBranch, "git-branch", opts.GitBranch, "Remote git branch")
 	cmd.PersistentFlags().StringVar(&opts.GitCommit, "git-commit", opts.GitCommit, "Hash of the git commit to retrieve")
 	cmd.PersistentFlags().StringVar(&opts.GitRepo, "git-repo", opts.GitRepo, "Git repository URL")
-	cmd.PersistentFlags().IntVar(&opts.GitMergeReqID, "git-mr-id", opts.GitMergeReqID, "GitLab Merge Request ID")
+	cmd.PersistentFlags().IntVar(&opts.GitMergeReqId, "git-mr-id", opts.GitMergeReqId, "GitLab Merge Request ID")
 	cmd.PersistentFlags().StringVarP(&opts.SWSVariant, "sws-variant", "s", opts.SWSVariant, "Software stack variant")
 	cmd.PersistentFlags().StringVarP(&opts.Name, "name", "n", opts.Name, "Name for the software build")
 	cmd.PersistentFlags().StringVar(&opts.BuildLogBasePath, "log-basepath", opts.BuildLogBasePath, "Sets the base of the build log directory tree")

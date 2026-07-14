@@ -31,10 +31,10 @@ More info: https://www.eessi.io/docs/site_specific_config/host_injections/#the-h
 			if opts.GitBranch != "" && opts.GitCommit != "" {
 				return errors.New("--gitBranch and --gitCommit are mutually exclusive")
 			}
-			if opts.GitBranch != "" && opts.GitMergeReqID != 0 {
+			if opts.GitBranch != "" && opts.GitMergeReqId != 0 {
 				return errors.New("--gitBranch and --gitMergeRequestId are mutually exclusive")
 			}
-			if opts.GitCommit != "" && opts.GitMergeReqID != 0 {
+			if opts.GitCommit != "" && opts.GitMergeReqId != 0 {
 				return errors.New("--gitCommit and --gitMergeRequestId are mutually exclusive")
 			}
 			return nil
