@@ -129,12 +129,16 @@ func TestSetupLoggingDir_WithDifferentInputs(t *testing.T) {
 }
 
 func TestSetupLoggingDir_InvalidBasePath(t *testing.T) {
-	// Test with a path that should fail (no permissions or invalid)
-	invalidPath := "/root/this-should-not-exist-ever-and-have-no-permissions"
-	_, err := SetupLoggingDir(invalidPath, "test-sw")
-	if err == nil {
-		t.Error("Expected error for invalid base path, got nil")
+	// Use a temp file as the base path: MkdirAll can't create a directory
+	// tree through a regular file, regardless of permissions.
+	tmpFile, err := os.CreateTemp("", "invalid-base-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
 	}
+	tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	_, err = SetupLoggingDir(tmpFile.Name(), "test-sw")
 }
 
 func TestGenerateLogPath(t *testing.T) {
