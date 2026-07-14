@@ -4,8 +4,7 @@ Copyright © 2026 Adam McCartney <adam.mccartney@tuwien.ac.at>
 package cvmfs
 
 import (
-	"fmt"
-	"log"
+	"errors"
 	"log/slog"
 
 	"github.com/spf13/cobra"
@@ -29,16 +28,16 @@ cvmfs repository. The configuration of the build environment is specified
 by the container tool e.g: samctr.`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Name == "" {
-				logger.Error("--name is required")
+				return errors.New("--name is required")
 			}
 			if opts.GitBranch != "" && opts.GitCommit != "" {
-				logger.Error("--gitBranch and --gitCommit are mutually exclusive")
+				return errors.New("--gitBranch and --gitCommit are mutually exclusive")
 			}
 			if opts.GitBranch != "" && opts.GitMergeReqID != 0 {
-				logger.Error("--gitBranch and --gitMergeRequestId are mutually exclusive")
+				return errors.New("--gitBranch and --gitMergeRequestId are mutually exclusive")
 			}
 			if opts.GitCommit != "" && opts.GitMergeReqID != 0 {
-				logger.Error("--gitCommit and --gitMergeRequestId are mutually exclusive")
+				return errors.New("--gitCommit and --gitMergeRequestId are mutually exclusive")
 			}
 			return nil
 		},
@@ -48,19 +47,15 @@ by the container tool e.g: samctr.`,
 			data.Publish = publish
 
 			// 1. setup logging
-			blp, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
+			_, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
 			if err != nil {
-				logger.Error(fmt.Sprintf("cvmfs %s", err))
 				return err
 			}
-			log.Printf("git repo: %s\n", blp.GitRepo)
-			log.Printf("build cmd: %s\n", blp.BuildCmd)
 
 			// 2. setup git
 			// 3. render build cmd
 			err = renderBuildCmd(buildCmdTmpl, data)
 			if err != nil {
-				logger.Error(fmt.Sprintf("cvmfs %s", err))
 				return err
 			}
 			// 4. select build runner
