@@ -5,7 +5,7 @@ import "github.com/spf13/cobra"
 // Options is a mutable object containing data collected from use specified command line arguments
 type Options struct {
 	CPU              string `flag:"cpu" default:"zen4"`
-	GPU              string `flag:"gpu" default:"H100"`
+	GPU              string `flag:"gpu" default:"h100"`
 	GitBranch        string
 	GitCommit        string
 	GitRepo          string `flag:"git-repo" default:"https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer"`
@@ -19,7 +19,7 @@ type Options struct {
 func NewOptions() *Options {
 	return &Options{
 		CPU:              "zen4",
-		GPU:              "H100",
+		GPU:              "h100",
 		GitRepo:          "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
 		SWSVariant:       "2025.06",
 		BuildLogBasePath: "/opt/adm/asc-software-stack",

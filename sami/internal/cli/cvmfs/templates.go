@@ -12,6 +12,7 @@ import (
 type CvmfsBuildCmdData struct {
 	CPU        string
 	GPU        string
+	Arch       string
 	SWSVariant string
 	GitRepo    string
 	Easystack  string
@@ -40,6 +41,11 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 		Name:       "my-software",
 		Timestamp:  timestamp(),
 	}
+	if opts.GPU != "" {
+		cmdData.Arch = opts.CPU + "-" + opts.GPU
+	} else {
+		cmdData.Arch = opts.CPU
+	}
 	return cmdData
 }
 
@@ -61,7 +67,7 @@ ml load "EESSI/{{ .SWSVariant }}" "ASC/{{ .SWSVariant }}" \
 {{if .Publish}}
 eb -r --easystack ${stack_file}
 if [[ "$?" -eq 0 ]]; then
-    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}-{{ .Timestamp }}"
+    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}-{{ .Arch }}-{{ .Timestamp }}"
 else
     cp -a /tmp/ ${LOGDIR}/ctr-tmp
 fi
