@@ -55,15 +55,25 @@ by the container tool e.g: samctr.`,
 			}
 
 			// 2. git stuff (technical term)
-			if err := git.SetupGit(opts, bldPath, logger); err != nil {
+			state, err := git.SetupGit(opts, bldPath, logger)
+			if err != nil {
+				return err
+			}
+			state, err = git.GetChangedFiles(state, logger)
+			if err != nil {
 				return err
 			}
 
 			// 3. render build cmd
-			err = renderBuildCmd(buildCmdTmpl, data, bldPath.BuildCmd)
-			logger.Debug(fmt.Sprintf("rendered build command to: %s", bldPath.BuildCmd))
-			if err != nil {
-				return err
+			easystack := git.AllChangedFilePaths(state)
+			for i := range easystack {
+				data.Easystack = easystack[i]
+				logger.Info("set ", "easystack", data.Easystack)
+				err = renderBuildCmd(buildCmdTmpl, data, bldPath.BuildCmd)
+				logger.Debug(fmt.Sprintf("rendered build command to: %s", bldPath.BuildCmd))
+				if err != nil {
+					return err
+				}
 			}
 			// 4. select build runner
 			// 5. run build (hand off to runner)

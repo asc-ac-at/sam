@@ -9,12 +9,13 @@ import (
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
+// CvmfsBuildCmdData holds all required data to create a build_cmd.sh script
+// In particular, the script will run using _one_ Easystack file at a time.
 type CvmfsBuildCmdData struct {
 	CPU        string
 	GPU        string
 	Arch       string
 	SWSVariant string
-	GitRepo    string
 	Easystack  string
 	Publish    bool
 	LmodInit   string
@@ -29,12 +30,12 @@ func timestamp() string {
 	return fmt.Sprint(t.Format("20060102150405"))
 }
 
+// NewCvmfsBuildCmdData creates a structure with
 func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 	cmdData := &CvmfsBuildCmdData{
 		CPU:        opts.CPU,
 		GPU:        opts.GPU,
 		SWSVariant: opts.SWSVariant,
-		GitRepo:    "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
 		Publish:    false,
 		CvmfsRepo:  "/cvmfs/software.asc.ac.at",
 		Template:   buildCmdTmpl,
@@ -62,17 +63,17 @@ export EESSI_PROJECT_INSTALL={{ .CvmfsRepo }}
 
 ml --force purge
 ml load "EESSI/{{ .SWSVariant }}" "ASC/{{ .SWSVariant }}" \
-    && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SWSVariant }} ASC/{{ .SWSVariant }}\n"
+    && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SWSVariant }} ASC/{{ .SWSVariant }}"
 
 {{if .Publish}}
-eb -r --easystack ${stack_file}
+eb -r --easystack {{ .Easystack }}
 if [[ "$?" -eq 0 ]]; then
     crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}-{{ .Arch }}-{{ .Timestamp }}"
 else
     cp -a /tmp/ ${LOGDIR}/ctr-tmp
 fi
 {{- else}}
-eb -r --easystack ${stack_file}
+eb -r --easystack {{ .Easystack }}
 {{end}}
 `
 

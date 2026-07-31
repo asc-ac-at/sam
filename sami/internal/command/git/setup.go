@@ -10,26 +10,36 @@ import (
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 )
 
-func SetupGit(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logger *slog.Logger) error {
+// SetupGit is a generic catch-all function that checks out a git repository at the commit specified
+// by the user. The specific commit is handled using one of the available command line options.
+func SetupGit(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logger *slog.Logger) (*RepoState, error) {
 
 	if err := initializeRepo(opts, bldPath, logger); err != nil {
-		return err
+		return nil, err
 	}
 
+	state := &RepoState{}
 	repoPaths, err := GetRepoPathsForDir(bldPath.GitRepoPath, logger)
-	if err != nil {
-		return err
-	}
 	logger.Debug(fmt.Sprintf("SetupGit set repoPaths %s", repoPaths))
-	commitSha, err := getCommitSha(opts, repoPaths, logger)
+	if err != nil {
+		return state, err
+	}
+	state.Paths = repoPaths
+
+	state, err = getCommitSha(opts, state, logger)
 	if err != nil {
 		logger.Error("SetupGit failed to fetch commitSha")
-		return err
+		return state, err
 	}
-	logger.Info(fmt.Sprintf("SetupGit found user requested commit %s", commitSha))
-	return nil
+	if err := checkoutCommit(state, logger); err != nil {
+		return state, err
+	}
+	return state, nil
 }
 
+// initializeRepo will perform a git clone on the opts.GitRepo at the
+// GitRepoPath in the build log directory tree.
+// returns nil on success
 func initializeRepo(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logger *slog.Logger) error {
 	gitClone := NewGitCmd("clone").Arg(opts.GitRepo, bldPath.GitRepoPath).ToArgv()
 	gitRunner := command.NewRunner(command.WithTimeout(3 * time.Minute))
@@ -37,30 +47,45 @@ func initializeRepo(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logge
 		return err
 	}
 	logger.Debug(fmt.Sprintf("ran %s", gitClone))
-	logger.Info("will now check remote for changed files")
 	return nil
 }
 
 // getCommitSha determines the commit sha of the commit requested by the user
 // the commit request is specified via options to the command line
-func getCommitSha(opts *shared.Options, repoPaths *RepoPaths, logger *slog.Logger) (string, error) {
+// mutates state by updating the CommitSha field
+func getCommitSha(opts *shared.Options, state *RepoState, logger *slog.Logger) (*RepoState, error) {
 	if opts.GitCommit != "" {
-		return opts.GitCommit, nil
+		state.CommitSha = opts.GitCommit
 	}
+	var err error
 	if opts.GitBranch != "" {
-		res, err := getCommitShaFromBranchName(opts.GitBranch, repoPaths, logger)
+		state, err = getCommitShaFromBranchName(opts.GitBranch, state, logger)
 		if err != nil {
 			logger.Error(fmt.Sprintf("getCommitSha failed to determine commit from branch %s", opts.GitBranch))
-			return "", err
+			return state, err
 		}
-		return res, nil
+		return state, nil
 	}
-	//if opts.GitMergeReqId != 0 {
-	//	res, err := getCommitShaFromMergeReqId(opts.GitMergeReqId, logger)
-	//	if err != nil {
-	//		return "", err
-	//	}
-	//	return res, nil
-	//}
-	return "", fmt.Errorf("getCommitSha error unkown")
+	if opts.GitMergeReqId != 0 {
+		state, err = getCommitShaFromMergeReqId(opts.GitMergeReqId, state, logger)
+		if err != nil {
+			return state, err
+		}
+		return state, nil
+	}
+	return state, fmt.Errorf("getCommitSha error unkown")
+}
+
+// checkoutCommit checks out the commit referred to by
+// returns nil on success
+func checkoutCommit(state *RepoState, logger *slog.Logger) error {
+	gitCheckoutCmd := NewGitCmd("checkout").Arg(state.CommitSha)
+	gitCheckoutCmd.Dir(state.Paths.RepoPath())
+	gitCheckout := gitCheckoutCmd.ToArgv()
+	runner := command.NewRunner(command.WithTimeout(3 * time.Second))
+	if err := runner.Run(gitCheckout...); err != nil {
+		return err
+	}
+	logger.Debug(fmt.Sprintf("ran %s", gitCheckout))
+	return nil
 }
