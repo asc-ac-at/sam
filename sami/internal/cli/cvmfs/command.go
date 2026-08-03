@@ -65,16 +65,11 @@ by the container tool e.g: samctr.`,
 			}
 
 			// 3. render build cmd
-			easystack := git.AllChangedFilePaths(state)
-			for i := range easystack {
-				data.Easystack = easystack[i]
-				logger.Info("set ", "easystack", data.Easystack)
-				err = renderBuildCmd(buildCmdTmpl, data, bldPath.BuildCmd)
-				logger.Debug(fmt.Sprintf("rendered build command to: %s", bldPath.BuildCmd))
-				if err != nil {
-					return err
-				}
+			data.Easystacks = git.AllChangedFilePaths(state)
+			if err = renderBuildCmd(buildCmdTmpl, data, bldPath.BuildCmd); err != nil {
+				return err
 			}
+			logger.Debug(fmt.Sprintf("rendered build command to: %s", bldPath.BuildCmd))
 			// 4. select build runner
 			// 5. run build (hand off to runner)
 

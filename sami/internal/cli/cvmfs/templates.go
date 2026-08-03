@@ -16,7 +16,7 @@ type CvmfsBuildCmdData struct {
 	GPU        string
 	Arch       string
 	SWSVariant string
-	Easystack  string
+	Easystacks []string
 	Publish    bool
 	LmodInit   string
 	CvmfsRepo  string
@@ -52,12 +52,7 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 
 const buildCmdTmpl = `#!/usr/bin/env bash
 
-stack_file="{{ .Easystack }}"
-if [ ! -f ${stack_file} ]; then
-    printf "ERR - file not found ${stack_file}"
-    exit 1
-fi
-
+# General setup
 source {{ .LmodInit }}
 export EESSI_PROJECT_INSTALL={{ .CvmfsRepo }}
 
@@ -65,16 +60,29 @@ ml --force purge
 ml load "EESSI/{{ .SWSVariant }}" "ASC/{{ .SWSVariant }}" \
     && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SWSVariant }} ASC/{{ .SWSVariant }}"
 
+{{ range .Easystacks }}
+echo "Building easystack: {{ . }}"
+stack_file="{{ . }}"
+if [ ! -f ${stack_file} ]; then
+    printf "ERR - file not found ${stack_file}"
+    exit 1
+fi
+
+eb -r --easystack {{ . }}
+if [[ "$?" -ne 0 ]]; then
+    printf "ERR - easybuild failed for ${stack_file}"
+	exit 1
+fi
+{{end}}
+
 {{if .Publish}}
-eb -r --easystack {{ .Easystack }}
 if [[ "$?" -eq 0 ]]; then
     crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}-{{ .Arch }}-{{ .Timestamp }}"
 else
     cp -a /tmp/ ${LOGDIR}/ctr-tmp
 fi
-{{- else}}
-eb -r --easystack {{ .Easystack }}
 {{end}}
+
 `
 
 func renderBuildCmd(tmpl string, data *CvmfsBuildCmdData, buildCmd string) error {

@@ -2,7 +2,6 @@ package git
 
 import (
 	"bytes"
-	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -28,11 +27,8 @@ func GetChangedFiles(state *RepoState, logger *slog.Logger) (*RepoState, error) 
 	if err != nil {
 		return state, err
 	}
-	logger.Info("GetChangedFiles returns ", "out", out)
+	logger.Debug("GetChangedFiles returns ", "out", out)
 	lines := strings.Split(string(out), "\n")
-	for i := range lines {
-		fmt.Println(lines[i])
-	}
 	lines = slices.DeleteFunc(lines, func(s string) bool {
 		return s == "" // delete the empty strings
 	})

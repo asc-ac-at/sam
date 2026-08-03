@@ -53,6 +53,6 @@ func GetRepoPathsForDir(dir string, logger *slog.Logger) (*RepoPaths, error) {
 		repoPath:       lines[0],
 		repoGitDirPath: lines[1],
 	}
-	logger.Info(fmt.Sprintf("GetRepoPathsForDir set - repoPath: %s, repoGitDirPath %s", rp.RepoPath(), rp.RepoGitDirPath()))
+	logger.Debug(fmt.Sprintf("GetRepoPathsForDir set - repoPath: %s, repoGitDirPath %s", rp.RepoPath(), rp.RepoGitDirPath()))
 	return rp, nil
 }

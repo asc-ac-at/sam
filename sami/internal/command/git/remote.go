@@ -51,7 +51,7 @@ func getCommitShaFromBranchName(name string, state *RepoState, logger *slog.Logg
 	buf := bytes.Buffer{}
 	cmdCfg.WithStdout(&buf).WithStderr(os.Stderr)
 	out, err := cmdCfg.Output()
-	logger.Info("return", "out", out)
+	logger.Debug("return", "out", out)
 	if err != nil {
 		return state, err
 	}
