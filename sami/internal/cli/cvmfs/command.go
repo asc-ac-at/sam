@@ -59,13 +59,19 @@ by the container tool e.g: samctr.`,
 			if err != nil {
 				return err
 			}
+
 			state, err = git.GetChangedFiles(state, logger)
 			if err != nil {
 				return err
 			}
 
 			// 3. render build cmd
-			data.Easystacks = git.AllChangedFilePaths(state)
+			if len(state.TargetFiles) > 0 {
+				data.Easystacks = git.AllTargetFilePaths(state)
+			} else {
+				data.Easystacks = git.AllChangedFilePaths(state)
+			}
+
 			if err = renderBuildCmd(buildCmdTmpl, data, bldPath.BuildCmd); err != nil {
 				return err
 			}

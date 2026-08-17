@@ -34,6 +34,7 @@ func SetupGit(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logger *slo
 	if err := checkoutCommit(state, logger); err != nil {
 		return state, err
 	}
+	state = setTargetFiles(opts, state)
 	return state, nil
 }
 
@@ -88,4 +89,16 @@ func checkoutCommit(state *RepoState, logger *slog.Logger) error {
 	}
 	logger.Debug(fmt.Sprintf("ran %s", gitCheckout))
 	return nil
+}
+
+// setTargetFiles will copy the array of user specified target files if any were supplied as
+// options
+func setTargetFiles(opts *shared.Options, state *RepoState) *RepoState {
+	if len(opts.Files) == 0 {
+		return state
+	}
+	for _, f := range opts.Files {
+		state.TargetFiles = append(state.TargetFiles, f)
+	}
+	return state
 }
