@@ -47,6 +47,10 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 	} else {
 		cmdData.Arch = opts.CPU
 	}
+	// user supplied target files take precedence over changed files in the repo
+	if len(opts.Files) > 0 {
+		cmdData.Easystacks = opts.Files
+	}
 	return cmdData
 }
 

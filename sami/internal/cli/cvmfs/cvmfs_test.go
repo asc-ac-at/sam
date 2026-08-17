@@ -110,6 +110,7 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
+	opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
 	data := NewCvmfsBuildCmdData(opts)
 	data.Publish = true
 
@@ -137,7 +138,7 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 		t.Errorf("rendered output should contain SWSVariant %q", data.SWSVariant)
 	}
 	if !strings.Contains(got, "eb -r --easystack") {
-		t.Error("rendered output should contain eb command")
+		t.Errorf("rendered output should contain eb command, got: %q", got)
 	}
 }
 
