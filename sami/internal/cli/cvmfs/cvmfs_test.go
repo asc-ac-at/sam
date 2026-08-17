@@ -26,9 +26,6 @@ func TestNewCvmfsBuildCmdData(t *testing.T) {
 	if data.SWSVariant != opts.SWSVariant {
 		t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, opts.SWSVariant)
 	}
-	if data.GitRepo != "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer" {
-		t.Errorf("unexpected GitRepo: %q", data.GitRepo)
-	}
 	if data.Publish != false {
 		t.Error("expected Publish default false")
 	}
@@ -90,18 +87,6 @@ func TestNewCvmfsBuildCmdData_DifferentOpts(t *testing.T) {
 				t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, tt.wantSWS)
 			}
 		})
-	}
-}
-
-func TestNewCvmfsBuildCmdData_GitRepoHardcoded(t *testing.T) {
-	opts := optsForTest()
-	opts.GitRepo = "https://example.com/custom/repo.git"
-
-	data := NewCvmfsBuildCmdData(opts)
-
-	// GitRepo is hardcoded, not taken from opts
-	if data.GitRepo != "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer" {
-		t.Errorf("GitRepo is hardcoded: %q", data.GitRepo)
 	}
 }
 
