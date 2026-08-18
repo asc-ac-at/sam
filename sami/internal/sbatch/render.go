@@ -43,9 +43,9 @@ var (
 type ScriptData struct {
 	// Headers is the rendered output of RenderHeaders.
 	Headers string
-	// BuildCmd is the rendered build-command payload, rendered by the caller
-	// (e.g. cvmfs buildcmd.tmpl or a host_injections template).
-	BuildCmd string
+	// BuildCmdPath is the path to the rendered build-command script (e.g.
+	// $LOGDIR/build_cmd.sh), redirect-fed into the container's shell.
+	BuildCmdPath string
 }
 
 // RenderHeaders renders the #SBATCH directive block for partition. The whole

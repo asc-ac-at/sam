@@ -79,11 +79,11 @@ func TestRenderScript_ComposesHeadersThenBuildCmd(t *testing.T) {
 		t.Fatalf("render headers: %v", err)
 	}
 
-	payload := "echo \"running build\"\necho \"done\"\n"
+	buildCmdPath := "/some/logdir/build_cmd.sh"
 	var out bytes.Buffer
 	err = RenderScript(ScriptData{
-		Headers:  hdrBuf.String(),
-		BuildCmd: payload,
+		Headers:      hdrBuf.String(),
+		BuildCmdPath: buildCmdPath,
 	}, &out)
 	if err != nil {
 		t.Fatalf("RenderScript: %v", err)
@@ -95,14 +95,15 @@ func TestRenderScript_ComposesHeadersThenBuildCmd(t *testing.T) {
 		t.Errorf("first line = %q, want shebang", lines[0])
 	}
 	hi := strings.Index(s, "#SBATCH -p zen4_gpu")
-	bi := strings.Index(s, payload)
+	tail := "samctr exec \\\n    -- /bin/sh <" + buildCmdPath
+	ti := strings.Index(s, tail)
 	if hi < 0 {
 		t.Error("headers missing from composed script")
 	}
-	if bi < 0 {
-		t.Error("build payload missing from composed script")
+	if ti < 0 {
+		t.Errorf("samctr exec tail missing, want %q\n got: %q", tail, s)
 	}
-	if hi >= 0 && bi >= 0 && hi > bi {
-		t.Errorf("headers must precede the build payload\n got: %q", s)
+	if hi >= 0 && ti >= 0 && hi > ti {
+		t.Errorf("headers must precede the samctr exec tail\n got: %q", s)
 	}
 }
