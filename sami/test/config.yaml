@@ -6,7 +6,6 @@ sbatch-config:
         #SBATCH --output="$LOGDIR"/slurm-%j.out
   partitions:
     zen4_gpu:
-      partition: zen4_gpu
       qos: standard
       gres: "gpu:1"
       ntasks: 32
@@ -14,14 +13,12 @@ sbatch-config:
       cpus-per-task: 1
       threads-per-core: 1
     zen4_cpu:
-      partition: zen4_cpu
       qos: standard
       ntasks: 32
       mem: 256G
       cpus-per-task: 1
       threads-per-core: 2
     zen5_gpu:
-      partition: zen5_gpu
       qos: standard
       gres: "gpu:1"
       ntasks: 32
