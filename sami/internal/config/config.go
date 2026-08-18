@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
+type File struct {
 	Sbatch SbatchConfig `yaml:"sbatch-config"`
 }
 
@@ -66,14 +66,14 @@ type PartitionConfig struct {
 
 // LoadSbatchConfig is a custom loader that handles mapping partition
 // names into the Config.Sbatch struct
-func LoadSbatchConfig(path string) (*Config, error) {
+func LoadSbatchConfig(path string) (*File, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	var c Config
+	var c File
 	if err := dec.Decode(&c); err != nil {
 		return nil, err
 	}
