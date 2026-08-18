@@ -9,12 +9,14 @@ sbatch-config:
       partition: zen4_gpu
       qos: standard
       gres: "gpu:1"
+      ntasks: 32
       mem: 256G
       cpus-per-task: 1
       threads-per-core: 1
     zen4_cpu:
-      partition: zen4_gpu
+      partition: zen4_cpu
       qos: standard
+      ntasks: 32
       mem: 256G
       cpus-per-task: 1
       threads-per-core: 2
@@ -22,6 +24,7 @@ sbatch-config:
       partition: zen5_gpu
       qos: standard
       gres: "gpu:1"
+      ntasks: 32
       mem: 256G
       cpus-per-task: 1
       threads-per-core: 1

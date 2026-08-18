@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -16,8 +15,8 @@ type Config struct {
 
 // SimpleConfig represents minimal configuration structure
 type SbatchConfig struct {
-	SharedConfig    SharedConfig               `yaml:"shared"`
-	PartitionConfig map[string]PartitionConfig `yaml:"partitions"`
+	SharedConfig SharedConfig               `yaml:"shared"`
+	Partitions   map[string]PartitionConfig `yaml:"partitions"`
 }
 
 // SharedConfig holds any sbatch config that is shared between partitions
@@ -35,12 +34,35 @@ type SharedConfig struct {
 
 // ParitionConfig represents the sbatch headers for a specific partition
 type PartitionConfig struct {
-	Partition      string `yaml:"partition"`
+	Partition      string `yaml:"-"`
 	Qos            string `yaml:"qos"`
+	Ntasks         string `yaml:"ntasks"`
 	Gres           string `yaml:"gres,omitempty"`
 	Mem            string `yaml:"mem"`
 	CpusPerTask    int    `yaml:"cpus-per-task"`
 	ThreadsPerCore int    `yaml:"threads-per-core"`
+}
+
+// LoadSbatchConfig is a custom loader that handles mapping partition
+// names into the Config.Sbatch struct
+func LoadSbatchConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	var c Config
+	if err := dec.Decode(&c); err != nil {
+		return nil, err
+	}
+	// single source of truth: name exists only as map key in the file;
+	// copy it into the struct here so consumers see a complete value
+	for name, p := range c.Sbatch.Partitions {
+		p.Partition = name
+		c.Sbatch.Partitions[name] = p // write-back required: p is a copy
+	}
+	return &c, nil
 }
 
 var cfgFileVar string
@@ -52,19 +74,12 @@ func init() {
 func main() {
 	flag.Parse()
 
-	// Read and parse YAML file
-	data, err := os.ReadFile(cfgFileVar)
+	config, err := LoadSbatchConfig(cfgFileVar)
 	if err != nil {
-		log.Fatalf("error opening file: %s", cfgFileVar)
-	}
-
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	var config Config
-	if err := dec.Decode(&config); err != nil {
-		log.Fatalf("could not unmarshal data: %s", data)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	fmt.Println(config.Sbatch.SharedConfig.Header)
-	fmt.Println(config.Sbatch.PartitionConfig)
+	fmt.Println(config.Sbatch.Partitions)
 	fmt.Println(config.Sbatch.SharedConfig.Footer)
 }
