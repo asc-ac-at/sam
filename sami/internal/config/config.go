@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,7 +25,7 @@ type SbatchConfig struct {
 func (s *SbatchConfig) SbatchHeaders(partition string) (*SbatchHeaders, error) {
 	p, ok := s.Partitions[partition]
 	if !ok {
-		return nil, fmt.Errorf("Key not found for partition %s", partition)
+		return nil, fmt.Errorf("unknown partition %q; valid partitions: %s", partition, strings.Join(s.validPartitionNames(), ", "))
 	}
 	sbheaders := &SbatchHeaders{
 		Header:    s.SharedConfig.Header,
@@ -31,6 +33,17 @@ func (s *SbatchConfig) SbatchHeaders(partition string) (*SbatchHeaders, error) {
 		Footer:    s.SharedConfig.Footer,
 	}
 	return sbheaders, nil
+}
+
+// validPartitionNames returns the configured partition names in sorted order,
+// so error messages are deterministic regardless of map iteration order.
+func (s *SbatchConfig) validPartitionNames() []string {
+	names := make([]string, 0, len(s.Partitions))
+	for name := range s.Partitions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // SbatchHeaders holds the sbatch configuration for a specific partition
