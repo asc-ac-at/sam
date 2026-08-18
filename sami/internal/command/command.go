@@ -13,7 +13,7 @@ import (
 type CmdRunner interface {
 	Run(args ...string) error
 	RunShell(arg string) error
-	New() *CmdConfig
+	New(args ...string) *CmdConfig
 }
 
 type cmdRunner struct {
@@ -144,6 +144,7 @@ func (c *CmdConfig) Output() ([]byte, error) {
 
 	cmd := exec.CommandContext(ctx, c.Args[0], c.Args[1:]...)
 	cmd.Env = c.Env
+	cmd.Stdin = c.Stdin
 
 	return cmd.Output()
 }
@@ -155,6 +156,7 @@ func (c *CmdConfig) CombinedOutput() ([]byte, error) {
 
 	cmd := exec.CommandContext(ctx, c.Args[0], c.Args[1:]...)
 	cmd.Env = c.Env
+	cmd.Stdin = c.Stdin
 
 	return cmd.CombinedOutput()
 }

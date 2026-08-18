@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -93,5 +94,43 @@ func TestOptions_AllFields(t *testing.T) {
 				t.Errorf("%s: got %v, want %v", tt.name, tt.got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewOptions_BuildBackendDefault(t *testing.T) {
+	opts := NewOptions()
+	if opts.BuildBackend != string(BackendLocal) {
+		t.Errorf("expected BuildBackend default 'local', got %q", opts.BuildBackend)
+	}
+}
+
+func TestParseBackend(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    Backend
+		wantErr bool
+	}{
+		{"slurm", BackendSlurm, false},
+		{"local", BackendLocal, false},
+		{"bogus", "", true},
+		{"", "", true},
+	}
+	for _, c := range cases {
+		got, err := ParseBackend(c.in)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("ParseBackend(%q): expected error, got nil", c.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("ParseBackend(%q): unexpected error %v", c.in, err)
+		}
+		if got != c.want {
+			t.Errorf("ParseBackend(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	if err := func() error { _, err := ParseBackend("bogus"); return err }(); err != nil && !strings.Contains(err.Error(), "slurm") {
+		t.Errorf("unknown backend error should list valid values, got: %v", err)
 	}
 }

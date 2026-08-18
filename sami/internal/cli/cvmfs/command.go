@@ -12,6 +12,7 @@ import (
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/command/git"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/sbatch"
 )
 
 var (
@@ -76,10 +77,9 @@ by the container tool e.g: samctr.`,
 				return err
 			}
 			logger.Debug(fmt.Sprintf("rendered build command to: %s", bldPath.BuildCmd))
-			// 4. select build runner
-			// 5. run build (hand off to runner)
 
-			return nil
+			// 4+5. select build backend and hand the rendered build to it
+			return runBackend(opts, bldPath.BuildCmd, logger, sbatch.NewSbatchSubmitter(nil))
 		},
 	}
 

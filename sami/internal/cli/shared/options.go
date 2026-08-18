@@ -1,6 +1,30 @@
 package shared
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+// Backend selects how the rendered build is run.
+type Backend string
+
+const (
+	BackendSlurm Backend = "slurm"
+	BackendLocal Backend = "local"
+)
+
+// ParseBackend validates a backend name, erroring on unknown values.
+func ParseBackend(s string) (Backend, error) {
+	switch Backend(s) {
+	case BackendSlurm:
+		return BackendSlurm, nil
+	case BackendLocal:
+		return BackendLocal, nil
+	default:
+		return "", fmt.Errorf("unknown build backend %q (valid: %s, %s)", s, BackendSlurm, BackendLocal)
+	}
+}
 
 // Options is a mutable object containing data collected from use specified command line arguments
 type Options struct {
@@ -12,6 +36,8 @@ type Options struct {
 	GitMergeReqId    int      `flag:"git-mr-id" default:"0"`
 	SWSVariant       string   `flag:"sws-variant" default:"2025.06"`
 	Name             string   `flag:"name"`
+	Partition        string   `flag:"partition"`
+	BuildBackend     string   `flag:"build-backend" default:"local"`
 	BuildLogBasePath string   `flag:"log-basepath" default:"/opt/adm/asc-software-stack"`
 	Verbose          bool     `flag:"verbose" default:"false"`
 	Files            []string `flag:"files"`
@@ -23,6 +49,7 @@ func NewOptions() *Options {
 		GPU:              "h100",
 		GitRepo:          "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
 		SWSVariant:       "2025.06",
+		BuildBackend:     string(BackendLocal),
 		BuildLogBasePath: "/opt/adm/asc-software-stack",
 	}
 }
@@ -36,6 +63,8 @@ func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
 	cmd.PersistentFlags().IntVar(&opts.GitMergeReqId, "git-mr-id", opts.GitMergeReqId, "GitLab Merge Request ID")
 	cmd.PersistentFlags().StringVarP(&opts.SWSVariant, "sws-variant", "s", opts.SWSVariant, "Software stack variant")
 	cmd.PersistentFlags().StringVarP(&opts.Name, "name", "n", opts.Name, "Name for the software build")
+	cmd.PersistentFlags().StringVar(&opts.Partition, "partition", opts.Partition, "Slurm partition to run the build on")
+	cmd.PersistentFlags().StringVar(&opts.BuildBackend, "build-backend", opts.BuildBackend, "Build backend: slurm or local")
 	cmd.PersistentFlags().StringVar(&opts.BuildLogBasePath, "log-basepath", opts.BuildLogBasePath, "Sets the base of the build log directory tree")
 	cmd.PersistentFlags().BoolVar(&opts.Verbose, "verbose", opts.Verbose, "Enable verbose logging")
 	cmd.PersistentFlags().StringArrayVarP(&opts.Files, "files", "f", opts.Files, "Easystack files to pass to easybuild. Overrides any changed files in repo.")
