@@ -3,8 +3,8 @@ package cvmfs
 import (
 	_ "embed"
 	"fmt"
-	"html/template"
 	"os"
+	"text/template"
 	"time"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"

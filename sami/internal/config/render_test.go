@@ -59,3 +59,39 @@ func TestRenderSbatchHeaders_UnknownPartition(t *testing.T) {
 		t.Errorf("error should mention valid partitions, got: %v", err)
 	}
 }
+
+func TestRenderSbatchScript_ComposesHeadersThenBuildCmd(t *testing.T) {
+	f := loadFromYAML(t, canonicalYAML)
+
+	var hdrBuf bytes.Buffer
+	if err := RenderSbatchHeaders(&f.Sbatch, "zen4_gpu", &hdrBuf); err != nil {
+		t.Fatalf("render headers: %v", err)
+	}
+
+	payload := "echo \"running build\"\necho \"done\"\n"
+	var out bytes.Buffer
+	err := RenderSbatchScript(SbatchScriptData{
+		SbatchHeaders: hdrBuf.String(),
+		BuildCmd:      payload,
+	}, &out)
+	if err != nil {
+		t.Fatalf("RenderSbatchScript: %v", err)
+	}
+
+	s := out.String()
+	lines := strings.SplitN(s, "\n", 2)
+	if lines[0] != "#!/usr/bin/env bash" {
+		t.Errorf("first line = %q, want shebang", lines[0])
+	}
+	hi := strings.Index(s, "#SBATCH -p zen4_gpu")
+	bi := strings.Index(s, payload)
+	if hi < 0 {
+		t.Error("headers missing from composed script")
+	}
+	if bi < 0 {
+		t.Error("build payload missing from composed script")
+	}
+	if hi >= 0 && bi >= 0 && hi > bi {
+		t.Errorf("headers must precede the build payload\n got: %q", s)
+	}
+}
