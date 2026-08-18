@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/sbatch"
 )
 
 var (
@@ -30,7 +31,7 @@ func main() {
 	}
 
 	w := bufio.NewWriter(os.Stdout)
-	if err := config.RenderSbatchHeaders(&cfg.Sbatch, partitionVar, w); err != nil {
+	if err := sbatch.RenderHeaders(&cfg.Sbatch, partitionVar, w); err != nil {
 		log.Fatalln(err)
 	}
 	w.Flush()

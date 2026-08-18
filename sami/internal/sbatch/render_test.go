@@ -1,20 +1,28 @@
-package config
+package sbatch
 
 import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 )
+
+// the committed canonical fixture
+const fixturePath = "../../test/config.yaml"
 
 func renderForTest(t *testing.T, partition string) (string, error) {
 	t.Helper()
-	f := loadFromYAML(t, canonicalYAML)
+	f, err := config.LoadSbatchConfig(fixturePath)
+	if err != nil {
+		t.Fatalf("LoadSbatchConfig(fixture): %v", err)
+	}
 	var buf bytes.Buffer
-	err := RenderSbatchHeaders(&f.Sbatch, partition, &buf)
+	err = RenderHeaders(&f.Sbatch, partition, &buf)
 	return buf.String(), err
 }
 
-func TestRenderSbatchHeaders_GPUPartition(t *testing.T) {
+func TestRenderHeaders_GPUPartition(t *testing.T) {
 	out, err := renderForTest(t, "zen4_gpu")
 	if err != nil {
 		t.Fatalf("render: %v", err)
@@ -37,7 +45,7 @@ func TestRenderSbatchHeaders_GPUPartition(t *testing.T) {
 	}
 }
 
-func TestRenderSbatchHeaders_CPUPartitionOmitsGres(t *testing.T) {
+func TestRenderHeaders_CPUPartitionOmitsGres(t *testing.T) {
 	out, err := renderForTest(t, "zen4_cpu")
 	if err != nil {
 		t.Fatalf("render: %v", err)
@@ -50,7 +58,7 @@ func TestRenderSbatchHeaders_CPUPartitionOmitsGres(t *testing.T) {
 	}
 }
 
-func TestRenderSbatchHeaders_UnknownPartition(t *testing.T) {
+func TestRenderHeaders_UnknownPartition(t *testing.T) {
 	_, err := renderForTest(t, "nope")
 	if err == nil {
 		t.Fatal("expected error for unknown partition, got nil")
@@ -60,22 +68,25 @@ func TestRenderSbatchHeaders_UnknownPartition(t *testing.T) {
 	}
 }
 
-func TestRenderSbatchScript_ComposesHeadersThenBuildCmd(t *testing.T) {
-	f := loadFromYAML(t, canonicalYAML)
+func TestRenderScript_ComposesHeadersThenBuildCmd(t *testing.T) {
+	f, err := config.LoadSbatchConfig(fixturePath)
+	if err != nil {
+		t.Fatalf("LoadSbatchConfig(fixture): %v", err)
+	}
 
 	var hdrBuf bytes.Buffer
-	if err := RenderSbatchHeaders(&f.Sbatch, "zen4_gpu", &hdrBuf); err != nil {
+	if err := RenderHeaders(&f.Sbatch, "zen4_gpu", &hdrBuf); err != nil {
 		t.Fatalf("render headers: %v", err)
 	}
 
 	payload := "echo \"running build\"\necho \"done\"\n"
 	var out bytes.Buffer
-	err := RenderSbatchScript(SbatchScriptData{
-		SbatchHeaders: hdrBuf.String(),
-		BuildCmd:      payload,
+	err = RenderScript(ScriptData{
+		Headers:  hdrBuf.String(),
+		BuildCmd: payload,
 	}, &out)
 	if err != nil {
-		t.Fatalf("RenderSbatchScript: %v", err)
+		t.Fatalf("RenderScript: %v", err)
 	}
 
 	s := out.String()
