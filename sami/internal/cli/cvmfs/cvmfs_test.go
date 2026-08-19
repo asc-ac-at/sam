@@ -163,6 +163,33 @@ func TestRenderBuildCmd_PublishFalse(t *testing.T) {
 	}
 }
 
+func TestRenderBuildCmd_LmodInit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	opts := optsForTest()
+	data := NewCvmfsBuildCmdData(opts)
+
+	outFile := filepath.Join(tmpDir, "build_cmd.sh")
+	err = renderBuildCmd(buildCmdTmpl, data, outFile)
+	if err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+
+	want := "/cvmfs/software.eessi.io/versions/" + opts.SWSVariant + "/init/lmod/sh"
+	if !strings.Contains(string(content), "source "+want) {
+		t.Errorf("rendered output should source lmod init %q\n got: %q", want, string(content))
+	}
+}
+
 func TestRenderBuildCmd_InvalidPath(t *testing.T) {
 	opts := optsForTest()
 	data := NewCvmfsBuildCmdData(opts)

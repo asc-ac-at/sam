@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"text/template"
 	"time"
 
@@ -37,6 +38,7 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 	cmdData := &CvmfsBuildCmdData{
 		SWSVariant: opts.SWSVariant,
 		Publish:    false,
+		LmodInit:   filepath.Join("/cvmfs/software.eessi.io/versions", opts.SWSVariant, "init/lmod/sh"),
 		CvmfsRepo:  "/cvmfs/software.asc.ac.at",
 		Template:   buildCmdTmpl,
 		Name:       "my-software",
