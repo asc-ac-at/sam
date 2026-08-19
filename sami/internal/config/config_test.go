@@ -203,3 +203,61 @@ func writeTempConfig(t *testing.T, yaml string) string {
 	}
 	return path
 }
+
+func TestArchSubdir_Mapping(t *testing.T) {
+	f, err := LoadSbatchConfig(filepath.Join("..", "..", "test", "config.yaml"))
+	if err != nil {
+		t.Fatalf("failed to load fixture: %v", err)
+	}
+
+	t.Run("hit", func(t *testing.T) {
+		sub, err := f.ArchSubdir("zen4")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sub != "x86_64/amd/zen4" {
+			t.Errorf("got %q, want x86_64/amd/zen4", sub)
+		}
+	})
+
+	t.Run("miss lists valid archs", func(t *testing.T) {
+		_, err := f.ArchSubdir("skylake")
+		if err == nil {
+			t.Fatal("expected error for unknown arch")
+		}
+		for _, want := range []string{"zen4", "zen5"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error should list valid arch %q, got: %v", want, err)
+			}
+		}
+	})
+}
+
+func TestAccelSubdir_Mapping(t *testing.T) {
+	f, err := LoadSbatchConfig(filepath.Join("..", "..", "test", "config.yaml"))
+	if err != nil {
+		t.Fatalf("failed to load fixture: %v", err)
+	}
+
+	t.Run("hit", func(t *testing.T) {
+		sub, err := f.AccelSubdir("cc90")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sub != "accel/nvidia/cc90" {
+			t.Errorf("got %q, want accel/nvidia/cc90", sub)
+		}
+	})
+
+	t.Run("miss lists valid accels", func(t *testing.T) {
+		_, err := f.AccelSubdir("gfx90a")
+		if err == nil {
+			t.Fatal("expected error for unknown accel")
+		}
+		for _, want := range []string{"cc80", "cc90"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error should list valid accel %q, got: %v", want, err)
+			}
+		}
+	})
+}

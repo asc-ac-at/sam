@@ -10,14 +10,40 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// GenericArchSubdir is the EESSI subdir for generic (non-tuned) x86_64
+// builds, selected with the --generic flag instead of --arch.
+const GenericArchSubdir = "x86_64/generic"
+
 type File struct {
-	Sbatch SbatchConfig `yaml:"sbatch-config"`
+	Sbatch       SbatchConfig      `yaml:"sbatch-config"`
+	ArchMapping  map[string]string `yaml:"arch-mapping"`
+	AccelMapping map[string]string `yaml:"accel-mapping"`
 }
 
 // SimpleConfig represents minimal configuration structure
 type SbatchConfig struct {
 	SharedConfig SharedConfig               `yaml:"shared"`
 	Partitions   map[string]PartitionConfig `yaml:"partitions"`
+}
+
+// ArchSubdir resolves a short arch name (e.g. zen4) to its EESSI
+// subdirectory (e.g. x86_64/amd/zen4) using the arch-mapping table.
+func (f *File) ArchSubdir(arch string) (string, error) {
+	sub, ok := f.ArchMapping[arch]
+	if !ok {
+		return "", fmt.Errorf("unknown arch %q; valid archs: %s", arch, strings.Join(sortedKeys(f.ArchMapping), ", "))
+	}
+	return sub, nil
+}
+
+// AccelSubdir resolves a short accelerator name (e.g. cc90) to its EESSI
+// subdirectory (e.g. accel/nvidia/cc90) using the accel-mapping table.
+func (f *File) AccelSubdir(accel string) (string, error) {
+	sub, ok := f.AccelMapping[accel]
+	if !ok {
+		return "", fmt.Errorf("unknown accel %q; valid accels: %s", accel, strings.Join(sortedKeys(f.AccelMapping), ", "))
+	}
+	return sub, nil
 }
 
 // SbatchConfig.SbatchHeaders gets the SbatchHeaders for a cpu/gpu configuration
@@ -38,12 +64,18 @@ func (s *SbatchConfig) SbatchHeaders(partition string) (*SbatchHeaders, error) {
 // validPartitionNames returns the configured partition names in sorted order,
 // so error messages are deterministic regardless of map iteration order.
 func (s *SbatchConfig) validPartitionNames() []string {
-	names := make([]string, 0, len(s.Partitions))
-	for name := range s.Partitions {
-		names = append(names, name)
+	return sortedKeys(s.Partitions)
+}
+
+// sortedKeys returns the keys of a map in sorted order, for deterministic
+// error messages regardless of map iteration order.
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
 	}
-	sort.Strings(names)
-	return names
+	sort.Strings(keys)
+	return keys
 }
 
 // SbatchHeaders holds the sbatch configuration for a specific partition

@@ -25,7 +25,7 @@ fi
 
 {{if .Publish}}
 if [[ "$?" -eq 0 ]]; then
-    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}-{{ .Arch }}-{{ .Timestamp }}"
+    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}-{{ .Timestamp }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }}
 else
     cp -a /tmp/ ${LOGDIR}/ctr-tmp
 fi

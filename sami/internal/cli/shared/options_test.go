@@ -8,12 +8,6 @@ import (
 func TestNewOptions_Defaults(t *testing.T) {
 	opts := NewOptions()
 
-	if opts.CPU != "zen4" {
-		t.Errorf("expected CPU default 'zen4', got %q", opts.CPU)
-	}
-	if opts.GPU != "h100" {
-		t.Errorf("expected GPU default 'h100', got %q", opts.GPU)
-	}
 	if opts.GitRepo != "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer" {
 		t.Errorf("unexpected GitRepo: %q", opts.GitRepo)
 	}
@@ -60,8 +54,6 @@ func TestOptions_AllFields(t *testing.T) {
 	opts := NewOptions()
 
 	// Modify all fields
-	opts.CPU = "amd"
-	opts.GPU = "a100"
 	opts.GitBranch = "develop"
 	opts.GitCommit = "abc123"
 	opts.GitRepo = "https://example.com/repo.git"
@@ -76,8 +68,6 @@ func TestOptions_AllFields(t *testing.T) {
 		got  interface{}
 		want interface{}
 	}{
-		{"CPU", opts.CPU, "amd"},
-		{"GPU", opts.GPU, "a100"},
 		{"GitBranch", opts.GitBranch, "develop"},
 		{"GitCommit", opts.GitCommit, "abc123"},
 		{"GitRepo", opts.GitRepo, "https://example.com/repo.git"},

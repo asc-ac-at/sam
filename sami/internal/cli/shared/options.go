@@ -28,8 +28,6 @@ func ParseBackend(s string) (Backend, error) {
 
 // Options is a mutable object containing data collected from use specified command line arguments
 type Options struct {
-	CPU              string `flag:"cpu" default:"zen4"`
-	GPU              string `flag:"gpu" default:"h100"`
 	GitBranch        string
 	GitCommit        string
 	GitRepo          string   `flag:"git-repo" default:"https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer"`
@@ -45,8 +43,6 @@ type Options struct {
 
 func NewOptions() *Options {
 	return &Options{
-		CPU:              "zen4",
-		GPU:              "h100",
 		GitRepo:          "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
 		SWSVariant:       "2025.06",
 		BuildBackend:     string(BackendLocal),
@@ -55,8 +51,6 @@ func NewOptions() *Options {
 }
 
 func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
-	cmd.PersistentFlags().StringVarP(&opts.CPU, "cpu", "c", opts.CPU, "CPU machine architecture")
-	cmd.PersistentFlags().StringVarP(&opts.GPU, "gpu", "g", opts.GPU, "GPU machine architecture")
 	cmd.PersistentFlags().StringVar(&opts.GitBranch, "git-branch", opts.GitBranch, "Remote git branch")
 	cmd.PersistentFlags().StringVar(&opts.GitCommit, "git-commit", opts.GitCommit, "Hash of the git commit to retrieve")
 	cmd.PersistentFlags().StringVar(&opts.GitRepo, "git-repo", opts.GitRepo, "Git repository URL")

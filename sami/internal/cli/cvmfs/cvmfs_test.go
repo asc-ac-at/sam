@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 )
 
 func TestNewCvmfsBuildCmdData(t *testing.T) {
@@ -17,12 +18,6 @@ func TestNewCvmfsBuildCmdData(t *testing.T) {
 		t.Fatal("NewCvmfsBuildCmdData returned nil")
 	}
 
-	if data.CPU != opts.CPU {
-		t.Errorf("CPU = %q, want %q", data.CPU, opts.CPU)
-	}
-	if data.GPU != opts.GPU {
-		t.Errorf("GPU = %q, want %q", data.GPU, opts.GPU)
-	}
 	if data.SWSVariant != opts.SWSVariant {
 		t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, opts.SWSVariant)
 	}
@@ -56,37 +51,13 @@ func TestCvmfsBuildCmdData_Publish(t *testing.T) {
 }
 
 func TestNewCvmfsBuildCmdData_DifferentOpts(t *testing.T) {
-	tests := []struct {
-		name    string
-		cpu     string
-		gpu     string
-		sws     string
-		wantCPU string
-		wantGPU string
-		wantSWS string
-	}{
-		{"zen4/h100", "zen4", "h100", "2025.06", "zen4", "h100", "2025.06"},
-	}
+	opts := optsForTest()
+	opts.SWSVariant = "2026.01"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			opts := optsForTest()
-			opts.CPU = tt.cpu
-			opts.GPU = tt.gpu
-			opts.SWSVariant = tt.sws
+	data := NewCvmfsBuildCmdData(opts)
 
-			data := NewCvmfsBuildCmdData(opts)
-
-			if data.CPU != tt.wantCPU {
-				t.Errorf("CPU = %q, want %q", data.CPU, tt.wantCPU)
-			}
-			if data.GPU != tt.wantGPU {
-				t.Errorf("GPU = %q, want %q", data.GPU, tt.wantGPU)
-			}
-			if data.SWSVariant != tt.wantSWS {
-				t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, tt.wantSWS)
-			}
-		})
+	if data.SWSVariant != "2026.01" {
+		t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, "2026.01")
 	}
 }
 
@@ -113,6 +84,8 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 	opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
 	data := NewCvmfsBuildCmdData(opts)
 	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.AccelSubdir = "accel/nvidia/cc90"
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	err = renderBuildCmd(buildCmdTmpl, data, outFile)
@@ -128,11 +101,11 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 
 	// Should contain template placeholders substituted
 	got := string(content)
-	if !strings.Contains(got, data.CPU) {
-		t.Errorf("rendered output should contain CPU %q", data.CPU)
+	if !strings.Contains(got, "--arch-subdir "+data.ArchSubdir) {
+		t.Errorf("rendered output should contain arch subdir %q, got: %q", data.ArchSubdir, got)
 	}
-	if !strings.Contains(got, data.GPU) {
-		t.Errorf("rendered output should contain GPU %q", data.GPU)
+	if !strings.Contains(got, "--accel-subdir "+data.AccelSubdir) {
+		t.Errorf("rendered output should contain accel subdir %q, got: %q", data.AccelSubdir, got)
 	}
 	if !strings.Contains(got, data.SWSVariant) {
 		t.Errorf("rendered output should contain SWSVariant %q", data.SWSVariant)
@@ -226,10 +199,94 @@ func TestRenderBuildCmd_NonZeroSWS(t *testing.T) {
 
 func optsForTest() *shared.Options {
 	return &shared.Options{
-		CPU:        "zen4",
-		GPU:        "h100",
 		GitRepo:    "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
 		SWSVariant: "2025.06",
 		Name:       "test-build",
 	}
+}
+
+func TestResolveSubdirs(t *testing.T) {
+	cfg := &config.File{
+		ArchMapping:  map[string]string{"zen4": "x86_64/amd/zen4", "zen5": "x86_64/amd/zen5"},
+		AccelMapping: map[string]string{"cc80": "accel/nvidia/cc80", "cc90": "accel/nvidia/cc90"},
+	}
+
+	t.Run("arch hit", func(t *testing.T) {
+		arch, accel, err := resolveSubdirs(cfg, "zen4", "", false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if arch != "x86_64/amd/zen4" {
+			t.Errorf("archSubdir = %q, want x86_64/amd/zen4", arch)
+		}
+		if accel != "" {
+			t.Errorf("accelSubdir = %q, want empty (CPU-only build)", accel)
+		}
+	})
+
+	t.Run("arch and accel hit", func(t *testing.T) {
+		arch, accel, err := resolveSubdirs(cfg, "zen5", "cc90", false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if arch != "x86_64/amd/zen5" {
+			t.Errorf("archSubdir = %q, want x86_64/amd/zen5", arch)
+		}
+		if accel != "accel/nvidia/cc90" {
+			t.Errorf("accelSubdir = %q, want accel/nvidia/cc90", accel)
+		}
+	})
+
+	t.Run("generic", func(t *testing.T) {
+		arch, accel, err := resolveSubdirs(cfg, "", "", true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if arch != "x86_64/generic" {
+			t.Errorf("archSubdir = %q, want x86_64/generic", arch)
+		}
+		if accel != "" {
+			t.Errorf("accelSubdir = %q, want empty", accel)
+		}
+	})
+
+	t.Run("generic conflicts with arch", func(t *testing.T) {
+		if _, _, err := resolveSubdirs(cfg, "zen4", "", true); err == nil {
+			t.Error("expected error when --generic combined with --arch")
+		}
+	})
+
+	t.Run("neither arch nor generic", func(t *testing.T) {
+		_, _, err := resolveSubdirs(cfg, "", "", false)
+		if err == nil {
+			t.Error("expected error when neither --arch nor --generic given")
+		}
+		if !strings.Contains(err.Error(), "--arch") {
+			t.Errorf("error should mention --arch, got: %v", err)
+		}
+	})
+
+	t.Run("unknown arch errors and lists valid", func(t *testing.T) {
+		_, _, err := resolveSubdirs(cfg, "skylake", "", false)
+		if err == nil {
+			t.Error("expected error for unknown arch")
+		}
+		for _, want := range []string{"zen4", "zen5"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error should list valid arch %q, got: %v", want, err)
+			}
+		}
+	})
+
+	t.Run("unknown accel errors and lists valid", func(t *testing.T) {
+		_, _, err := resolveSubdirs(cfg, "zen4", "gfx90a", false)
+		if err == nil {
+			t.Error("expected error for unknown accel")
+		}
+		for _, want := range []string{"cc80", "cc90"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error should list valid accel %q, got: %v", want, err)
+			}
+		}
+	})
 }
