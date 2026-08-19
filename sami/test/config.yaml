@@ -1,0 +1,34 @@
+arch-mapping:
+  zen4: x86_64/amd/zen4
+  zen5: x86_64/amd/zen5
+accel-mapping:
+  cc80: accel/nvidia/cc80
+  cc90: accel/nvidia/cc90
+
+sbatch-config:
+  shared:
+    header: "#sami --vanilla"
+    footer: |
+        #SBATCH --job-name="${SW_NAME}-samctr"
+        #SBATCH --output="$LOGDIR"/slurm-%j.out
+  partitions:
+    zen4_gpu:
+      qos: standard
+      gres: "gpu:1"
+      ntasks: 32
+      mem: 256G
+      cpus-per-task: 1
+      threads-per-core: 1
+    zen4_cpu:
+      qos: standard
+      ntasks: 32
+      mem: 256G
+      cpus-per-task: 1
+      threads-per-core: 2
+    zen5_gpu:
+      qos: standard
+      gres: "gpu:1"
+      ntasks: 32
+      mem: 256G
+      cpus-per-task: 1
+      threads-per-core: 1

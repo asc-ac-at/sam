@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+{{ .Headers }}
+
+samctr exec \
+    -- /bin/sh <{{ .BuildCmdPath }}
