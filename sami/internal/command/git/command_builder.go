@@ -8,21 +8,21 @@ import "strings"
 // including conditional args
 type GitCommandBuilder struct {
 	// command string
-	args []string
+	Args []string
 }
 
 func NewGitCmd(command string) *GitCommandBuilder {
-	return &GitCommandBuilder{args: []string{command}}
+	return &GitCommandBuilder{Args: []string{command}}
 }
 
 func (gcb *GitCommandBuilder) Arg(args ...string) *GitCommandBuilder {
-	gcb.args = append(gcb.args, args...)
+	gcb.Args = append(gcb.Args, args...)
 
 	return gcb
 }
 
 func (gcb *GitCommandBuilder) ToArgv() []string {
-	return append([]string{"git"}, gcb.args...)
+	return append([]string{"git"}, gcb.Args...)
 }
 
 func (gcb *GitCommandBuilder) ToString() string {
@@ -32,7 +32,7 @@ func (gcb *GitCommandBuilder) ToString() string {
 // the -C arg will make git do a `cd` to the directory before doing anything else
 func (gcb *GitCommandBuilder) Dir(path string) *GitCommandBuilder {
 	// repo path comes before the command
-	gcb.args = append([]string{"-C", path}, gcb.args...)
+	gcb.Args = append([]string{"-C", path}, gcb.Args...)
 
 	return gcb
 }

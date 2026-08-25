@@ -1,6 +1,8 @@
 package git
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"log/slog"
 	"time"
@@ -43,8 +45,20 @@ func SetupGit(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog
 // returns nil on success
 func initializeRepo(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger) error {
 	gitClone := NewGitCmd("clone").Arg(opts.GitRepo, blPath.GitRepoPath).ToArgv()
-	gitRunner := command.NewRunner(command.WithTimeout(3 * time.Minute))
-	if err := gitRunner.Run(gitClone...); err != nil {
+
+	cfg := command.NewCmdConfig(gitClone)
+
+	var bufO bytes.Buffer
+	var bufE bytes.Buffer
+
+	wo := bufio.NewWriter(&bufO)
+	we := bufio.NewWriter(&bufE)
+
+	cfg.WithStdout(wo)
+	cfg.WithStderr(we)
+	cfg.Timeout = 3 * time.Minute
+
+	if err := cfg.Run(); err != nil {
 		return err
 	}
 	logger.Debug(fmt.Sprintf("ran %s", gitClone))
@@ -83,10 +97,23 @@ func checkoutCommit(state *RepoState, logger *slog.Logger) error {
 	gitCheckoutCmd := NewGitCmd("checkout").Arg(state.CommitSha)
 	gitCheckoutCmd.Dir(state.Paths.RepoPath())
 	gitCheckout := gitCheckoutCmd.ToArgv()
-	runner := command.NewRunner(command.WithTimeout(3 * time.Second))
-	if err := runner.Run(gitCheckout...); err != nil {
+
+	cfg := command.NewCmdConfig(gitCheckout)
+
+	var bufO bytes.Buffer
+	var bufE bytes.Buffer
+
+	wo := bufio.NewWriter(&bufO)
+	we := bufio.NewWriter(&bufE)
+
+	cfg.WithStdout(wo)
+	cfg.WithStderr(we)
+	cfg.Timeout = 3 * time.Minute
+
+	if err := cfg.Run(); err != nil {
 		return err
 	}
+
 	logger.Debug(fmt.Sprintf("ran %s", gitCheckout))
 	return nil
 }

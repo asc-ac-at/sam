@@ -9,19 +9,29 @@ import (
 	"time"
 )
 
-// ShellRunner controls _when_ a shell command is run
+// CmdRunner controls _when_ a shell command is run
 type CmdRunner interface {
 	Run(args ...string) error
 	RunShell(arg string) error
 	New(args ...string) *CmdConfig
 }
 
+// cmdRunner is for minimal CmdConfig situations, where all we want to set is the timeout
 type cmdRunner struct {
 	Timeout time.Duration
 }
 
+// RunnerOption is a way to dynamically set options on a runner
+// Note that WithTimout is the only option that can currently be set, so it's somehow a bit of a
+// fancy implementation for this one thing. Also we're mixing implmentations in this file.
+// See git.checkoutCommit or git.initializeRepo for examples of the other implementation shape
 type RunnerOption func(*cmdRunner)
 
+// NewRunner is a bit too clever for my taste, it dynamically sets the
+// options on a cmdRunner it's unclear if we are restricted to only
+// every setting functions that are implemented to return a RunnerOption
+// function type, note we would probably need to expand the cmdRunner
+// struct in order to handle the other types.
 func NewRunner(opts ...RunnerOption) *cmdRunner {
 	r := &cmdRunner{}
 	for _, opt := range opts {
@@ -91,6 +101,18 @@ type CmdConfig struct {
 	Stderr  io.Writer
 	Stdin   io.Reader
 	Env     []string
+}
+
+// NewCmdConfig creates a bare bones CmdConfig with some sane defaults
+func NewCmdConfig(args []string) *CmdConfig {
+	cfg := &CmdConfig{
+		Args:    args,
+		Timeout: 30 * time.Second,
+		Stdout:  os.Stdout,
+		Stderr:  os.Stderr,
+		Stdin:   os.Stdin,
+	}
+	return cfg
 }
 
 // WithStdout sets the writer for command stdout.

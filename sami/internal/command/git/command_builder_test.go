@@ -10,20 +10,20 @@ func TestNewGitCmd(t *testing.T) {
 	if gcb == nil {
 		t.Fatal("NewGitCmd returned nil")
 	}
-	if len(gcb.args) != 1 || gcb.args[0] != "clone" {
-		t.Errorf("unexpected initial args: %v", gcb.args)
+	if len(gcb.Args) != 1 || gcb.Args[0] != "clone" {
+		t.Errorf("unexpected initial args: %v", gcb.Args)
 	}
 }
 
 func TestGitCommandBuilder_Arg(t *testing.T) {
 	gcb := NewGitCmd("clone").Arg("origin", "dir")
 	want := []string{"clone", "origin", "dir"}
-	if len(gcb.args) != len(want) {
-		t.Fatalf("expected %d args, got %d", len(want), len(gcb.args))
+	if len(gcb.Args) != len(want) {
+		t.Fatalf("expected %d args, got %d", len(want), len(gcb.Args))
 	}
 	for i, w := range want {
-		if gcb.args[i] != w {
-			t.Errorf("args[%d] = %q, want %q", i, gcb.args[i], w)
+		if gcb.Args[i] != w {
+			t.Errorf("args[%d] = %q, want %q", i, gcb.Args[i], w)
 		}
 	}
 }
