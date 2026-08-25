@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
@@ -48,18 +50,15 @@ func initializeRepo(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger
 
 	cfg := command.NewCmdConfig(gitClone)
 
-	var bufO bytes.Buffer
-	var bufE bytes.Buffer
+	var stderr bytes.Buffer
+	wo := io.Discard
 
-	wo := bufio.NewWriter(&bufO)
-	we := bufio.NewWriter(&bufE)
-
-	cfg.WithStdout(wo)
-	cfg.WithStderr(we)
+	cfg.Stdout = wo
+	cfg.Stderr = &stderr
 	cfg.Timeout = 3 * time.Minute
 
 	if err := cfg.Run(); err != nil {
-		return err
+		return fmt.Errorf("git clone (%s): %w: %s", opts.GitRepo, err, strings.TrimSpace(stderr.String()))
 	}
 	logger.Debug(fmt.Sprintf("ran %s", gitClone))
 	return nil
@@ -100,18 +99,17 @@ func checkoutCommit(state *RepoState, logger *slog.Logger) error {
 
 	cfg := command.NewCmdConfig(gitCheckout)
 
-	var bufO bytes.Buffer
-	var bufE bytes.Buffer
+	var stderr bytes.Buffer
 
-	wo := bufio.NewWriter(&bufO)
-	we := bufio.NewWriter(&bufE)
+	wo := io.Discard
+	we := bufio.NewWriter(&stderr)
 
-	cfg.WithStdout(wo)
-	cfg.WithStderr(we)
+	cfg.Stdout = wo
+	cfg.Stderr = we
 	cfg.Timeout = 3 * time.Minute
 
 	if err := cfg.Run(); err != nil {
-		return err
+		return fmt.Errorf("git checkout (%s): %w: %s", state.CommitSha, err, strings.TrimSpace(stderr.String()))
 	}
 
 	logger.Debug(fmt.Sprintf("ran %s", gitCheckout))
