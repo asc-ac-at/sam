@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -37,15 +36,19 @@ func GetRepoPathsForDir(dir string, logger *slog.Logger) (*RepoPaths, error) {
 	//TODO: we need to call this _after_ git clone
 	gitCmd := NewGitCmd("rev-parse").Arg("--show-toplevel", "--absolute-git-dir")
 	gitCmd.Dir(dir)
-	runner := command.NewRunner(command.WithTimeout(1 * time.Minute))
-	cmdCfg := runner.New(gitCmd.ToArgv()...)
-	buf := bytes.Buffer{}
-	cmdCfg.WithStdout(&buf).WithStderr(os.Stderr)
-	out, err := cmdCfg.Output()
-	if err != nil {
-		return nil, err
+
+	cfg := command.NewCmdConfig(gitCmd.ToArgv())
+
+	var stdout, stderr bytes.Buffer
+	cfg.Stdout = &stdout
+	cfg.Stderr = &stderr
+	cfg.Timeout = 1 * time.Minute
+
+	if err := cfg.Run(); err != nil {
+		return nil, fmt.Errorf("git rev-parse (%s): %w: %s", dir, err, strings.TrimSpace(stderr.String()))
 	}
-	lines := strings.Split(string(out), "\n")
+
+	lines := strings.Split(stdout.String(), "\n")
 	if len(lines) != 3 {
 		return nil, fmt.Errorf("GetRepoPathsForDir unexpected output with %d lines (expected 3)", len(lines))
 	}
