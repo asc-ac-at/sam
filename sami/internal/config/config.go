@@ -105,8 +105,6 @@ type PartitionConfig struct {
 	Mem            string `yaml:"mem"`
 	CpusPerTask    int    `yaml:"cpus-per-task"`
 	ThreadsPerCore int    `yaml:"threads-per-core"`
-	JobName        string `yaml:"job-name"`
-	Output         string `yaml:"output"`
 }
 
 // LoadSbatchConfig is a custom loader that handles mapping partition
