@@ -12,14 +12,14 @@ import (
 
 // SetupGit is a generic catch-all function that checks out a git repository at the commit specified
 // by the user. The specific commit is handled using one of the available command line options.
-func SetupGit(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logger *slog.Logger) (*RepoState, error) {
+func SetupGit(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger) (*RepoState, error) {
 
-	if err := initializeRepo(opts, bldPath, logger); err != nil {
+	if err := initializeRepo(opts, blPath, logger); err != nil {
 		return nil, err
 	}
 
 	state := &RepoState{}
-	repoPaths, err := GetRepoPathsForDir(bldPath.GitRepoPath, logger)
+	repoPaths, err := GetRepoPathsForDir(blPath.GitRepoPath, logger)
 	logger.Debug(fmt.Sprintf("SetupGit set repoPaths %s", repoPaths))
 	if err != nil {
 		return state, err
@@ -41,8 +41,8 @@ func SetupGit(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logger *slo
 // initializeRepo will perform a git clone on the opts.GitRepo at the
 // GitRepoPath in the build log directory tree.
 // returns nil on success
-func initializeRepo(opts *shared.Options, bldPath *buildlog.BuildLogPaths, logger *slog.Logger) error {
-	gitClone := NewGitCmd("clone").Arg(opts.GitRepo, bldPath.GitRepoPath).ToArgv()
+func initializeRepo(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger) error {
+	gitClone := NewGitCmd("clone").Arg(opts.GitRepo, blPath.GitRepoPath).ToArgv()
 	gitRunner := command.NewRunner(command.WithTimeout(3 * time.Minute))
 	if err := gitRunner.Run(gitClone...); err != nil {
 		return err

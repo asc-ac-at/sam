@@ -1,4 +1,6 @@
+{{ if .Header }}
 {{ .Header }}
+{{ end -}}
 #SBATCH -p {{ .Partition.Partition }}
 #SBATCH --qos {{ .Partition.Qos }}
 #SBATCH --ntasks {{ .Partition.Ntasks }}
@@ -8,4 +10,5 @@
 #SBATCH --mem {{ .Partition.Mem }}
 #SBATCH --cpus-per-task={{ .Partition.CpusPerTask }}
 #SBATCH --threads-per-core={{ .Partition.ThreadsPerCore }}
-{{ .Footer }}
+#SBATCH --job-name={{ .JobName }}
+#SBATCH --output={{ .Output }}

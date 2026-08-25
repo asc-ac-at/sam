@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,15 +50,17 @@ func (f *File) AccelSubdir(accel string) (string, error) {
 
 // SbatchConfig.SbatchHeaders gets the SbatchHeaders for a cpu/gpu configuration
 // Returns the headers that target a specific parition or else raises an error
-func (s *SbatchConfig) SbatchHeaders(partition string) (*SbatchHeaders, error) {
+func (s *SbatchConfig) SbatchHeaders(partition string, blPath *buildlog.BuildLogPaths) (*SbatchHeaders, error) {
 	p, ok := s.Partitions[partition]
 	if !ok {
 		return nil, fmt.Errorf("unknown partition %q; valid partitions: %s", partition, strings.Join(s.validPartitionNames(), ", "))
 	}
+	outPath := filepath.Join(blPath.BuildLog, "slurm-%j.out")
 	sbheaders := &SbatchHeaders{
 		Header:    s.SharedConfig.Header,
 		Partition: p,
-		Footer:    s.SharedConfig.Footer,
+		JobName:   "sami",
+		Output:    outPath,
 	}
 	return sbheaders, nil
 }
@@ -82,20 +86,14 @@ func sortedKeys[V any](m map[string]V) []string {
 type SbatchHeaders struct {
 	Header    string
 	Partition PartitionConfig
-	Footer    string
+	JobName   string
+	Output    string
 }
 
 // SharedConfig holds any sbatch config that is shared between partitions
 // the strings are expected to be a valid sbatch header, example:
-//
-//	shared:
-//	  header: "#sami --vanilla"
-//	  footer: |
-//	      #SBATCH --job-name="${SW_NAME}-samctr"
-//	      #SBATCH --output="$LOGDIR"/slurm-%j.out
 type SharedConfig struct {
 	Header string `yaml:"header,omitempty"`
-	Footer string `yaml:"footer,omitempty"`
 }
 
 // ParitionConfig represents the sbatch headers for a specific partition
@@ -107,6 +105,8 @@ type PartitionConfig struct {
 	Mem            string `yaml:"mem"`
 	CpusPerTask    int    `yaml:"cpus-per-task"`
 	ThreadsPerCore int    `yaml:"threads-per-core"`
+	JobName        string `yaml:"job-name"`
+	Output         string `yaml:"output"`
 }
 
 // LoadSbatchConfig is a custom loader that handles mapping partition

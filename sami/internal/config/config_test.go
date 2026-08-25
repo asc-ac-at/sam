@@ -11,9 +11,6 @@ const canonicalYAML = `
 sbatch-config:
   shared:
     header: "#sami --vanilla"
-    footer: |
-        #SBATCH --job-name="${SW_NAME}-samctr"
-        #SBATCH --output="$LOGDIR"/slurm-%j.out
   partitions:
     zen4_gpu:
       qos: standard
