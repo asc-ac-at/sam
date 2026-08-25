@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -51,9 +50,8 @@ func initializeRepo(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger
 	cfg := command.NewCmdConfig(gitClone)
 
 	var stderr bytes.Buffer
-	wo := io.Discard
 
-	cfg.Stdout = wo
+	cfg.Stdout = io.Discard
 	cfg.Stderr = &stderr
 	cfg.Timeout = 3 * time.Minute
 
@@ -101,11 +99,8 @@ func checkoutCommit(state *RepoState, logger *slog.Logger) error {
 
 	var stderr bytes.Buffer
 
-	wo := io.Discard
-	we := bufio.NewWriter(&stderr)
-
-	cfg.Stdout = wo
-	cfg.Stderr = we
+	cfg.Stdout = io.Discard
+	cfg.Stderr = &stderr
 	cfg.Timeout = 3 * time.Minute
 
 	if err := cfg.Run(); err != nil {
