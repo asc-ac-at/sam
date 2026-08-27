@@ -179,6 +179,17 @@ func PrepareContainerPreRun(cmd *cobra.Command, args []string) error {
 		ApptainerCmdOpts: append([]string{}, apptainerCmdOpts...),
 	}
 
+	// With the legacy --nv path (use nvidia-container-cli = no), apptainer
+	// prefixes LD_LIBRARY_PATH with the *host* driver library directories
+	// (e.g. /lib:/lib64). Inside the container these resolve to the image's
+	// native libs, whose glibc may be older than what EESSI compat-layer
+	// binaries require (LD_LIBRARY_PATH is searched before RUNPATH). Override
+	// so only the injected GPU libs dir precedes RUNPATH resolution.
+	if nvidiaFlag != "" {
+		runtime.Environ = append(runtime.Environ,
+			"APPTAINERENV_LD_LIBRARY_PATH=/.singularity.d/libs")
+	}
+
 	// 8) setup container
 	image := Image
 	if image == "" {
