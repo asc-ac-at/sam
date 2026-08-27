@@ -31,7 +31,7 @@ import (
 func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) error {
 	var args []string
 	// second exclude is redundant because of the filter below
-	args = append(args, "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
+	args = append(args, "tar", "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
 	workingDir := versionsDir(repo)
 	args = append(args, "-C", workingDir)
 	tarball := tarballPath(cpuArchSubdir, name, outdir)
