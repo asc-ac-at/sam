@@ -6,10 +6,15 @@ import (
 	"testing"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 )
 
 // the committed canonical fixture
 const fixturePath = "../../test/config.yaml"
+
+// testLogPaths is a fixture whose BuildLog determines the rendered --output
+// path; the literal keeps expectations stable.
+var testLogPaths = &buildlog.BuildLogPaths{BuildLog: "/logdir"}
 
 func renderForTest(t *testing.T, partition string) (string, error) {
 	t.Helper()
@@ -18,7 +23,7 @@ func renderForTest(t *testing.T, partition string) (string, error) {
 		t.Fatalf("LoadSbatchConfig(fixture): %v", err)
 	}
 	var buf bytes.Buffer
-	err = RenderHeaders(&f.Sbatch, partition, &buf)
+	err = RenderHeaders(&f.Sbatch, partition, testLogPaths, &buf)
 	return buf.String(), err
 }
 
@@ -36,8 +41,10 @@ func TestRenderHeaders_GPUPartition(t *testing.T) {
 		"#SBATCH --mem 256G",
 		"#SBATCH --cpus-per-task=1",
 		"#SBATCH --threads-per-core=1",
-		"#SBATCH --job-name=\"${SW_NAME}-samctr\"",
-		"#SBATCH --output=\"$LOGDIR\"/slurm-%j.out",
+		// job-name and output are rendered from code, not config; these
+		// literal lines are the contract fixed by the header refactor.
+		"#SBATCH --job-name=sami",
+		"#SBATCH --output=/logdir/slurm-%j.out",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered output missing %q\n got: %q", want, out)
@@ -58,6 +65,33 @@ func TestRenderHeaders_CPUPartitionOmitsGres(t *testing.T) {
 	}
 }
 
+func TestRenderHeaders_EmptyHeaderOmitted(t *testing.T) {
+	cfg := &config.SbatchConfig{
+		Partitions: map[string]config.PartitionConfig{
+			"p1": {
+				Partition:      "p1",
+				Qos:            "q1",
+				Ntasks:         "8",
+				Mem:            "32G",
+				CpusPerTask:    1,
+				ThreadsPerCore: 1,
+			},
+		},
+	}
+	var buf bytes.Buffer
+	if err := RenderHeaders(cfg, "p1", testLogPaths, &buf); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	out := buf.String()
+	first, _, _ := strings.Cut(out, "\n")
+	if first != "#SBATCH -p p1" {
+		t.Errorf("first line = %q, want partition line (empty header must be omitted)", first)
+	}
+	if !strings.Contains(out, "#SBATCH --job-name=sami") {
+		t.Errorf("rendered output missing job-name line, got: %q", out)
+	}
+}
+
 func TestRenderHeaders_UnknownPartition(t *testing.T) {
 	_, err := renderForTest(t, "nope")
 	if err == nil {
@@ -75,7 +109,7 @@ func TestRenderScript_ComposesHeadersThenBuildCmd(t *testing.T) {
 	}
 
 	var hdrBuf bytes.Buffer
-	if err := RenderHeaders(&f.Sbatch, "zen4_gpu", &hdrBuf); err != nil {
+	if err := RenderHeaders(&f.Sbatch, "zen4_gpu", testLogPaths, &hdrBuf); err != nil {
 		t.Fatalf("render headers: %v", err)
 	}
 

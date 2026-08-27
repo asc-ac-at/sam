@@ -12,6 +12,7 @@ import (
 	"text/template"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 )
 
 //go:embed templates/*.tmpl
@@ -51,12 +52,12 @@ type ScriptData struct {
 // RenderHeaders renders the #SBATCH directive block for partition. The whole
 // block must precede any executable line in the final submit script, which
 // is what RenderScript guarantees.
-func RenderHeaders(cfg *config.SbatchConfig, part string, w io.Writer) error {
+func RenderHeaders(cfg *config.SbatchConfig, part string, blPath *buildlog.BuildLogPaths, w io.Writer) error {
 	tmpl, err := headersTmpl.get()
 	if err != nil {
 		return fmt.Errorf("parsing sbatch headers template: %w", err)
 	}
-	data, err := cfg.SbatchHeaders(part)
+	data, err := cfg.SbatchHeaders(part, blPath)
 	if err != nil {
 		return fmt.Errorf("fetching partition config for %q: %w", part, err)
 	}

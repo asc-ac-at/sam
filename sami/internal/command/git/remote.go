@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -23,16 +22,21 @@ func getCommitShaFromMergeReqId(mrid int, state *RepoState, logger *slog.Logger)
 
 	gitCmd := NewGitCmd("ls-remote").Arg("origin", fmt.Sprintf("refs/merge-requests/%d/head", mrid))
 	gitCmd.Dir(state.Paths.RepoPath())
-	runner := command.NewRunner(command.WithTimeout(10 * time.Second))
-	cmdCfg := runner.New(gitCmd.ToArgv()...)
-	buf := bytes.Buffer{}
-	cmdCfg.WithStdout(&buf).WithStderr(os.Stderr)
-	out, err := cmdCfg.Output()
-	if err != nil {
-		return state, err
+
+	cfg := command.NewCmdConfig(gitCmd.ToArgv())
+
+	var stdout, stderr bytes.Buffer
+	cfg.Stdout = &stdout
+	cfg.Stderr = &stderr
+	cfg.Timeout = 10 * time.Second
+
+	if err := cfg.Run(); err != nil {
+		return state, fmt.Errorf("git ls-remote (mr %d): %w: %s", mrid, err, strings.TrimSpace(stderr.String()))
 	}
-	logger.Debug("getCommitShaFromMergeReqId returned ", "out", string(out))
-	parts := strings.Split(string(out), "\t")
+
+	out := stdout.String()
+	logger.Debug("getCommitShaFromMergeReqId returned ", "out", out)
+	parts := strings.Split(out, "\t")
 	commitId := parts[0]
 	if commitId == "" {
 		return state, fmt.Errorf("getCommitShaFromMergeReqId found no sha for mr id %d", mrid)
@@ -46,16 +50,21 @@ func getCommitShaFromBranchName(name string, state *RepoState, logger *slog.Logg
 	gitCmd := NewGitCmd("show-ref").Arg(name)
 	gitCmd.Dir(state.Paths.RepoPath())
 	logger.Debug("getCommitShaFromBranchName preparing to run ", "cmd", gitCmd.ToString())
-	runner := command.NewRunner(command.WithTimeout(10 * time.Second))
-	cmdCfg := runner.New(gitCmd.ToArgv()...)
-	buf := bytes.Buffer{}
-	cmdCfg.WithStdout(&buf).WithStderr(os.Stderr)
-	out, err := cmdCfg.Output()
-	logger.Debug("return", "out", out)
-	if err != nil {
-		return state, err
+
+	cfg := command.NewCmdConfig(gitCmd.ToArgv())
+
+	var stdout, stderr bytes.Buffer
+	cfg.Stdout = &stdout
+	cfg.Stderr = &stderr
+	cfg.Timeout = 10 * time.Second
+
+	if err := cfg.Run(); err != nil {
+		return state, fmt.Errorf("git show-ref (%s): %w: %s", name, err, strings.TrimSpace(stderr.String()))
 	}
-	commitId := strings.Split(string(out), " ")
+
+	out := stdout.String()
+	logger.Debug("return", "out", out)
+	commitId := strings.Split(out, " ")
 	state.CommitSha = commitId[0]
 	return state, nil
 }

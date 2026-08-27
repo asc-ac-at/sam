@@ -73,13 +73,13 @@ by the container tool e.g: samctr.`,
 			}
 
 			// 1. setup logging
-			bldPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
+			blPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
 			if err != nil {
 				return err
 			}
 
 			// 2. git stuff (technical term)
-			state, err := git.SetupGit(opts, bldPath, logger)
+			state, err := git.SetupGit(opts, blPath, logger)
 			if err != nil {
 				return err
 			}
@@ -96,13 +96,13 @@ by the container tool e.g: samctr.`,
 				data.Easystacks = git.AllChangedFilePaths(state)
 			}
 
-			if err = renderBuildCmd(buildCmdTmpl, data, bldPath.BuildCmd); err != nil {
+			if err = renderBuildCmd(buildCmdTmpl, data, blPath.BuildCmd); err != nil {
 				return err
 			}
-			logger.Debug(fmt.Sprintf("rendered build command to: %s", bldPath.BuildCmd))
+			logger.Debug(fmt.Sprintf("rendered build command to: %s", blPath.BuildCmd))
 
 			// 4+5. select build backend and hand the rendered build to it
-			return runBackend(opts, bldPath.BuildCmd, logger, sbatch.NewSbatchSubmitter(nil))
+			return runBackend(opts, blPath, logger, sbatch.NewSbatchSubmitter())
 		},
 	}
 

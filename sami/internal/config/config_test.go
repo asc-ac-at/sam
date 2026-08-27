@@ -5,15 +5,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 )
+
+// fixedLogPaths returns a stable BuildLogPaths fixture: SbatchHeaders uses
+// only BuildLog, to derive the slurm --output path, so a fixed literal keeps
+// assertions deterministic.
+func fixedLogPaths() *buildlog.BuildLogPaths {
+	return &buildlog.BuildLogPaths{BuildLog: "/logdir"}
+}
 
 const canonicalYAML = `
 sbatch-config:
   shared:
     header: "#sami --vanilla"
-    footer: |
-        #SBATCH --job-name="${SW_NAME}-samctr"
-        #SBATCH --output="$LOGDIR"/slurm-%j.out
   partitions:
     zen4_gpu:
       qos: standard
@@ -61,10 +67,6 @@ func TestLoadSbatchConfig_Canonical(t *testing.T) {
 	if f.Sbatch.SharedConfig.Header != "#sami --vanilla" {
 		t.Errorf("Header = %q", f.Sbatch.SharedConfig.Header)
 	}
-	if !strings.Contains(f.Sbatch.SharedConfig.Footer, "--job-name") {
-		t.Errorf("Footer missing --job-name: %q", f.Sbatch.SharedConfig.Footer)
-	}
-
 	p := f.Sbatch.Partitions["zen4_gpu"]
 	if p.Qos != "standard" {
 		t.Errorf("Qos = %q", p.Qos)
@@ -144,7 +146,7 @@ func TestLoadSbatchConfig_DuplicateKeyRejected(t *testing.T) {
 func TestSbatchHeaders_Hit(t *testing.T) {
 	f := loadFromYAML(t, canonicalYAML)
 
-	h, err := f.Sbatch.SbatchHeaders("zen4_gpu")
+	h, err := f.Sbatch.SbatchHeaders("zen4_gpu", fixedLogPaths())
 	if err != nil {
 		t.Fatalf("SbatchHeaders: %v", err)
 	}
@@ -157,15 +159,20 @@ func TestSbatchHeaders_Hit(t *testing.T) {
 	if h.Partition.Gres != "gpu:1" {
 		t.Errorf("Gres = %q", h.Partition.Gres)
 	}
-	if !strings.Contains(h.Footer, "--output") {
-		t.Errorf("Footer missing --output: %q", h.Footer)
+	// job-name and output are rendered from code, not config: assert the
+	// exact values the template will emit.
+	if h.JobName != "sami" {
+		t.Errorf("JobName = %q, want %q", h.JobName, "sami")
+	}
+	if want := filepath.Join("/logdir", "slurm-%j.out"); h.Output != want {
+		t.Errorf("Output = %q, want %q", h.Output, want)
 	}
 }
 
 func TestSbatchHeaders_CPUPartitionHasNoGres(t *testing.T) {
 	f := loadFromYAML(t, canonicalYAML)
 
-	h, err := f.Sbatch.SbatchHeaders("zen4_cpu")
+	h, err := f.Sbatch.SbatchHeaders("zen4_cpu", fixedLogPaths())
 	if err != nil {
 		t.Fatalf("SbatchHeaders: %v", err)
 	}
@@ -180,7 +187,7 @@ func TestSbatchHeaders_CPUPartitionHasNoGres(t *testing.T) {
 func TestSbatchHeaders_MissListsValidPartitions(t *testing.T) {
 	f := loadFromYAML(t, canonicalYAML)
 
-	_, err := f.Sbatch.SbatchHeaders("nope")
+	_, err := f.Sbatch.SbatchHeaders("nope", fixedLogPaths())
 	if err == nil {
 		t.Fatal("expected error for unknown partition, got nil")
 	}

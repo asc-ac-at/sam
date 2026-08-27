@@ -2,8 +2,8 @@ package git
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -19,16 +19,21 @@ import (
 func GetChangedFiles(state *RepoState, logger *slog.Logger) (*RepoState, error) {
 	gitDiffTreeCmd := NewGitCmd("diff-tree").Arg("--name-only", "--no-commit-id", state.CommitSha, "-r")
 	gitDiffTreeCmd.Dir(state.Paths.RepoPath())
-	runner := command.NewRunner(command.WithTimeout(3 * time.Second))
-	cmdCfg := runner.New(gitDiffTreeCmd.ToArgv()...)
-	buf := bytes.Buffer{}
-	cmdCfg.WithStdout(&buf).WithStderr(os.Stderr)
-	out, err := cmdCfg.Output()
-	if err != nil {
-		return state, err
+
+	cfg := command.NewCmdConfig(gitDiffTreeCmd.ToArgv())
+
+	var stdout, stderr bytes.Buffer
+	cfg.Stdout = &stdout
+	cfg.Stderr = &stderr
+	cfg.Timeout = 3 * time.Second
+
+	if err := cfg.Run(); err != nil {
+		return state, fmt.Errorf("git diff-tree (%s): %w: %s", state.CommitSha, err, strings.TrimSpace(stderr.String()))
 	}
+
+	out := stdout.String()
 	logger.Debug("GetChangedFiles returns ", "out", out)
-	lines := strings.Split(string(out), "\n")
+	lines := strings.Split(out, "\n")
 	lines = slices.DeleteFunc(lines, func(s string) bool {
 		return s == "" // delete the empty strings
 	})

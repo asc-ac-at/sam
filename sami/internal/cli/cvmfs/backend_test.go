@@ -9,7 +9,17 @@ import (
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 )
+
+// testLogPaths mirrors what RunE builds before calling runBackend; only
+// BuildLog (sbatch --output) and BuildCmd (payload path) matter here.
+func testLogPaths() *buildlog.BuildLogPaths {
+	return &buildlog.BuildLogPaths{
+		BuildLog: "/tmp/x",
+		BuildCmd: "/tmp/x/build_cmd.sh",
+	}
+}
 
 type fakeSubmitter struct {
 	scripts [][]byte
@@ -36,7 +46,7 @@ func TestRunBackend_UnknownBackendErrors(t *testing.T) {
 	opts.BuildBackend = "bogus"
 	sub := &fakeSubmitter{}
 
-	if err := runBackend(opts, "/tmp/x/build_cmd.sh", newTestLogger(), sub); err == nil {
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub); err == nil {
 		t.Fatal("expected error for unknown backend")
 	}
 	if len(sub.scripts) != 0 {
@@ -49,7 +59,7 @@ func TestRunBackend_LocalSkipsSbatch(t *testing.T) {
 	opts.BuildBackend = string(shared.BackendLocal)
 	sub := &fakeSubmitter{}
 
-	if err := runBackend(opts, "/tmp/x/build_cmd.sh", newTestLogger(), sub); err != nil {
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub); err != nil {
 		t.Fatalf("local backend: %v", err)
 	}
 	if len(sub.scripts) != 0 {
@@ -68,7 +78,7 @@ func TestRunBackend_Slurm_NoConfigRendersOnly(t *testing.T) {
 	opts.Partition = "zen4_cpu"
 	sub := &fakeSubmitter{}
 
-	if err := runBackend(opts, "/tmp/x/build_cmd.sh", newTestLogger(), sub); err != nil {
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub); err != nil {
 		t.Fatalf("missing config must be render-only, not an error: %v", err)
 	}
 	if len(sub.scripts) != 0 {
@@ -93,8 +103,8 @@ func TestRunBackend_Slurm_SubmitsComposedScript(t *testing.T) {
 	opts.Partition = "testpart"
 	sub := &fakeSubmitter{jobID: "4242"}
 
-	const cmdPath = "/tmp/x/build_cmd.sh"
-	if err := runBackend(opts, cmdPath, newTestLogger(), sub); err != nil {
+	bl := testLogPaths()
+	if err := runBackend(opts, bl, newTestLogger(), sub); err != nil {
 		t.Fatalf("slurm backend: %v", err)
 	}
 	if len(sub.scripts) != 1 {
@@ -104,7 +114,11 @@ func TestRunBackend_Slurm_SubmitsComposedScript(t *testing.T) {
 	for _, want := range []string{
 		"#!/usr/bin/env bash",
 		"#SBATCH -p testpart",
-		"samctr exec \\\n    -- /bin/sh <" + cmdPath,
+		// job-name and output are rendered from code, not config; these
+		// literal lines are the contract fixed by the header refactor.
+		"#SBATCH --job-name=sami",
+		"#SBATCH --output=/tmp/x/slurm-%j.out",
+		"samctr exec \\\n    -- /bin/sh <" + bl.BuildCmd,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("submitted script missing %q\n got: %q", want, s)
@@ -117,8 +131,6 @@ const testSbatchConfig = `
 sbatch-config:
   shared:
     header: "#sami --vanilla"
-    footer: |
-        #SBATCH --job-name="job"
   partitions:
     testpart:
       qos: testqos

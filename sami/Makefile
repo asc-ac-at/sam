@@ -4,7 +4,7 @@ GO := /usr/bin/env go
 BUILDDIR = build
 
 SAMI = $(BUILDDIR)/sami
-SAMI_VERSION = 0.0.1
+SAMI_VERSION = 0.0.7
 
 default: sami
 
@@ -12,7 +12,7 @@ sami: $(SAMI)
 
 $(SAMI): main.go
 	mkdir -p $(BUILDDIR)
-	$(GO) build -ldflags "-X 'gitlab.tuwien.ac.at/vsc/software-stacks/cmd/version=v$(SAMI_VERSION)'" -o $@ $^
+	$(GO) build -ldflags "-X 'gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/cmd.version=v$(SAMI_VERSION)'" -o $@ $^
 
 
 .phony: clean
