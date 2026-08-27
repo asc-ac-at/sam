@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/asc-ac-at/sam/pkg/subproc"
 )
 
 // ExecTar constructs a "tar" command and
@@ -129,6 +131,11 @@ func runCmd(cmdName string, args []string) ([]string, error) {
 	return lines, nil
 }
 
+/*
+ * find commands
+ *      configuration of subproc calls to the "find" executable
+ */
+
 // findModules wraps the "find" command in a transparent os/exec wrapper
 // and configures the args in order to find the
 func findModules(searchPath string) ([]string, error) {
@@ -137,22 +144,31 @@ func findModules(searchPath string) ([]string, error) {
 	modulePath := path.Join(searchPath, "modules")
 
 	// files
-	fArgs := []string{modulePath, "-type", "f"}
-	fRes, err := runCmd("find", fArgs)
-	if err != nil {
-		log.Println("FindModules error: ", err)
-		return result, err
+	cfgFiles := subproc.New([]string{"find", modulePath, "-type", "f"})
+
+	var stdout, stderr bytes.Buffer
+
+	cfgFiles.Stdout = &stdout
+	cfgFiles.Stderr = &stderr
+
+	if err := cfgFiles.Run(); err != nil {
+		return []string{}, fmt.Errorf("%s: %w, %s", cfgFiles.Args, err, strings.TrimSpace(stderr.String()))
 	}
-	result = append(result, fRes...)
+	result = append(result, strings.TrimSpace(stdout.String()))
+
+	stdout.Reset()
+	stderr.Reset()
 
 	// symlinks
-	sArgs := []string{modulePath, "-type", "l"}
-	sRes, err := runCmd("find", sArgs)
-	if err != nil {
-		log.Println("FindModules symlink error: ", err)
-		return result, err
+	cfgLn := subproc.New([]string{"find", modulePath, "-type", "l"})
+	cfgLn.Stdout = &stdout
+	cfgLn.Stderr = &stderr
+
+	if err := cfgLn.Run(); err != nil {
+		return []string{}, fmt.Errorf("%s: %w, %s", cfgLn.Args, err, strings.TrimSpace(stderr.String()))
 	}
-	result = append(result, sRes...)
+
+	result = append(result, strings.TrimSpace(stdout.String()))
 
 	return result, nil
 }
