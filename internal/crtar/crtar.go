@@ -27,13 +27,13 @@ import (
 // Change to the workingDir and create a tarball named tarballName using the
 // files in the listFile. Exclude anything mathching the two regular expressions
 // at the front of the args slice.
-func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) error {
+func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) error {
 	var args []string
 	// second exclude is redundant because of the filter below
 	args = append(args, "tar", "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
 	workingDir := versionsDir(repo)
 	args = append(args, "-C", workingDir)
-	tarball := tarballPath(cpuArchSubdir, name, outdir)
+	tarball := tarballPath(archSubdir, name, outdir)
 	args = append(args, "-czf", tarball)
 	filesFrom := fmt.Sprintf("--files-from=%s", listFile.Name())
 	args = append(args, filesFrom)
@@ -58,8 +58,8 @@ func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) error 
 
 // tarballPath constructs a filepath to the tarball that will be subsequently created.
 // returns a string containing the absolute path
-func tarballPath(cpuArchSubdir, name, outdir string) string {
-	normalizedArchDir := strings.ReplaceAll(cpuArchSubdir, "/", "-")
+func tarballPath(archSubdir, name, outdir string) string {
+	normalizedArchDir := strings.ReplaceAll(archSubdir, "/", "-")
 	t := time.Now()
 	ts := t.Format("20060102150405")
 	result := fmt.Sprintf("%s/%s-%s-%s.tar.gz", outdir, name, normalizedArchDir, ts)
@@ -83,9 +83,9 @@ func versionsDir(repo string) string {
 }
 
 // archDir is the subdirectory representing a microarchitecture
-func archDir(repo string, version string, cpuArchSubdir string) string {
+func archDir(repo string, version string, archSubdir string) string {
 	versionsDir := versionsDir(repo)
-	return path.Join(versionsDir, version, "software", "linux", cpuArchSubdir)
+	return path.Join(versionsDir, version, "software", "linux", archSubdir)
 }
 
 // Check for the presence of a lockfile
@@ -211,9 +211,9 @@ func newListFile(workdir string) (*os.File, error) {
 // context will equate to a software/module combination, or set of
 // combinations that exist after an easybuild command has succeeded in
 // building software into the overlay filesystem.
-func MakeListFile(repo, version, cpuArchSubdir string) (*os.File, error) {
+func MakeListFile(repo, version, archSubdir string) (*os.File, error) {
 
-	archDir := archDir(repo, version, cpuArchSubdir)
+	archDir := archDir(repo, version, archSubdir)
 
 	// file list for the tarball
 	var fileList []string
