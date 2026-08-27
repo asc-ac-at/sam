@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -27,7 +28,7 @@ import (
 // Change to the workingDir and create a tarball named tarballName using the
 // files in the listFile. Exclude anything mathching the two regular expressions
 // at the front of the args slice.
-func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) ([]string, error) {
+func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) error {
 	var args []string
 	// second exclude is redundant because of the filter below
 	args = append(args, "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
@@ -40,15 +41,20 @@ func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) ([]str
 
 	lockFile, lferr := acquireLockfile(tarball)
 	if lferr != nil {
-		return nil, fmt.Errorf("could not acquire lockfile: %w", lferr)
+		return fmt.Errorf("could not acquire lockfile: %w", lferr)
 	}
-	stdout, err := runCmd("tar", args)
-	if err != nil {
-		return nil, fmt.Errorf("creating tarball %s failed %w", tarball, err)
+
+	var stderr bytes.Buffer
+	cfg := subproc.New(args)
+	cfg.Stdout = io.Discard
+	cfg.Stderr = &stderr
+
+	if err := cfg.Run(); err != nil {
+		return fmt.Errorf("creating tarball %s failed %w: %s", tarball, err, strings.TrimSpace(stderr.String()))
 	}
 	log.Printf("tarball %s created", tarball)
 	removeLockfile(lockFile)
-	return stdout, nil
+	return nil
 }
 
 // tarballPath constructs a filepath to the tarball that will be subsequently created.

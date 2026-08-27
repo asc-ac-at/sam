@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package main
 
@@ -43,9 +43,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, execErr := crtar.ExecTar(*repoPtr, *cpuArchSubdirPtr, *namePtr, *outputDirPtr, listFile)
-	if execErr != nil {
-		log.Fatalf("execTar failed %s\n", execErr)
+	if err := crtar.ExecTar(*repoPtr, *cpuArchSubdirPtr, *namePtr, *outputDirPtr, listFile); err != nil {
+		log.Fatalf("execTar failed %s\n", err)
 	}
 
 }
