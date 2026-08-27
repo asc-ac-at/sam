@@ -1,21 +1,19 @@
+VERSION := 0.0.8
 
-SAMCTR_VERSION := 0.0.6
-CRTAR_VERSION := 0.0.3
-SAMGX_VERSION := 0.0.1
-
-all: samctr build_crtar
+all: samctr crtar
 
 samctr:
-	go build -ldflags "-X 'github.com/asc-ac-at/sam/pkg/cmd/samctr.version=v$(SAMCTR_VERSION)'" ./cmd/samctr
+	go build -ldflags "-X 'github.com/asc-ac-at/sam/pkg/cmd/samctr.version=v$(VERSION)'" ./cmd/samctr
 
 samgx:
-	go build -ldflags "-X 'main.Version=v$(SAMGX_VERSION)'" ./cmd/samgx
+	go build -ldflags "-X 'main.Version=v$(VERSION)'" ./cmd/samgx
 
-build_crtar:
-	go build -ldflags "-X 'main.Version=v$(CRTAR_VERSION)'" ./cmd/crtar
+crtar:
+	go build -ldflags "-X 'main.Version=v$(VERSION)'" ./cmd/crtar
 
 
-clean_all: clean_crtar clean_samctr
+.PHONY: clean
+clean: clean_crtar clean_samctr
 
 clean_crtar:
 	rm -f crtar
