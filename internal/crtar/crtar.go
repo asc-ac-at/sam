@@ -11,7 +11,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -117,24 +116,6 @@ func removeLockfile(lockFile *os.File) error {
 		return err
 	}
 	return nil
-}
-
-// runCmd is a wrapper around os/exec
-// execute a find command in a subprocess
-func runCmd(cmdName string, args []string) ([]string, error) {
-	cmd := exec.Command(cmdName, args...)
-	var spStdOut bytes.Buffer
-	var spStdErr bytes.Buffer
-	cmd.Stdout = &spStdOut
-	cmd.Stderr = &spStdErr
-	err := cmd.Run()
-	if err != nil {
-		log.Println("subprocess stderr: ", spStdErr.String())
-		log.Println("error executing command: ", err)
-		return []string{}, err
-	}
-	lines := strings.Split(spStdOut.String(), "\n")
-	return lines, nil
 }
 
 /*
