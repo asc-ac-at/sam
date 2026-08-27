@@ -140,7 +140,7 @@ func validateRequiredConfig(c *Config) error {
 	nvidia_mode := strings.TrimSpace(c.Nvidia)
 	if nvidia_mode != "all" {
 		// in the future we may use "install,run"
-		return fmt.Errorf("configuration error: nvidia mode %s not supported")
+		return fmt.Errorf("configuration error: nvidia mode %s not supported", nvidia_mode)
 	}
 
 	if len(c.WriteableRepos) > 0 {
