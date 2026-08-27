@@ -139,6 +139,35 @@ func TestRenderBuildCmd_PublishTrue(t *testing.T) {
 	}
 }
 
+func TestRenderBuildCmd_PublishCPUOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	opts := optsForTest()
+	data := NewCvmfsBuildCmdData(opts)
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.AccelSubdir = ""
+
+	outFile := filepath.Join(tmpDir, "build_cmd.sh")
+	err = renderBuildCmd(buildCmdTmpl, data, outFile)
+	if err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+
+	content, _ := os.ReadFile(outFile)
+	got := string(content)
+	if !strings.Contains(got, "--arch-subdir "+data.ArchSubdir) {
+		t.Errorf("rendered output should contain arch subdir %q, got: %q", data.ArchSubdir, got)
+	}
+	if strings.Contains(got, "--accel-subdir") {
+		t.Errorf("rendered output should not contain --accel-subdir for CPU-only build, got: %q", got)
+	}
+}
+
 func TestRenderBuildCmd_PublishFalse(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
 	if err != nil {
