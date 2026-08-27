@@ -67,6 +67,7 @@ func runSlurmBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logge
 	if err != nil {
 		return err
 	}
-	logger.Info("submitted build job", "partition", opts.Partition, "jobID", jobID)
+	outfile := fmt.Sprintf("%s/slurm-%s.out", blPath.BuildLog, jobID)
+	logger.Info("submitted build job", "partition", opts.Partition, "jobID", jobID, "output", outfile)
 	return nil
 }
