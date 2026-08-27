@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package crtar
 
@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+// ExecTar constructs a "tar" command and
 // tar --exclude=.cvmfscatalog --exclude=*.wh.* -C ${TOPDIR} -czf ${TARBALL} --files-from=${FILES_LIST}
 // TOPDIR=workingDir
 // TARBALL=tarballName
@@ -48,6 +49,8 @@ func ExecTar(repo, cpuArchSubdir, name, outdir string, listFile *os.File) ([]str
 	return stdout, nil
 }
 
+// tarballPath constructs a filepath to the tarball that will be subsequently created.
+// returns a string containing the absolute path
 func tarballPath(cpuArchSubdir, name, outdir string) string {
 	normalizedArchDir := strings.ReplaceAll(cpuArchSubdir, "/", "-")
 	t := time.Now()
@@ -67,10 +70,12 @@ func overlayUpperDir(repo string) string {
 	return path.Dir(repoDir)
 }
 
+// versionsDir constructs a path in the overlayfs
 func versionsDir(repo string) string {
 	return path.Join(overlayUpperDir(repo), "/versions")
 }
 
+// archDir is the subdirectory representing a microarchitecture
 func archDir(repo string, version string, cpuArchSubdir string) string {
 	versionsDir := versionsDir(repo)
 	return path.Join(versionsDir, version, "software", "linux", cpuArchSubdir)
@@ -97,6 +102,7 @@ func acquireLockfile(tarballPath string) (*os.File, error) {
 	}
 }
 
+// removeLockFile removes the temporary lockFile
 func removeLockfile(lockFile *os.File) error {
 	err := os.Remove(lockFile.Name())
 	if err != nil {
@@ -105,7 +111,8 @@ func removeLockfile(lockFile *os.File) error {
 	return nil
 }
 
-// Execute a find command in a subprocess
+// runCmd is a wrapper around os/exec
+// execute a find command in a subprocess
 func runCmd(cmdName string, args []string) ([]string, error) {
 	cmd := exec.Command(cmdName, args...)
 	var spStdOut bytes.Buffer
@@ -122,6 +129,8 @@ func runCmd(cmdName string, args []string) ([]string, error) {
 	return lines, nil
 }
 
+// findModules wraps the "find" command in a transparent os/exec wrapper
+// and configures the args in order to find the
 func findModules(searchPath string) ([]string, error) {
 	var result []string
 
@@ -148,7 +157,9 @@ func findModules(searchPath string) ([]string, error) {
 	return result, nil
 }
 
-// Find
+// findSoftware wraps the "find" command in a transparent os/exec
+// wrapper and uses it to find software subdirectories along the
+// searchPath. Returns an array of the found paths as strings and error.
 func findSoftware(searchPath string) ([]string, error) {
 	var result []string
 
@@ -184,7 +195,7 @@ func findSoftware(searchPath string) ([]string, error) {
 	return result, nil
 }
 
-// create
+// newListFile creates a files.list.txt in workdir
 func newListFile(workdir string) (*os.File, error) {
 	file, err := os.CreateTemp(workdir, "files.list.txt")
 
@@ -195,6 +206,11 @@ func newListFile(workdir string) (*os.File, error) {
 	return file, nil
 }
 
+// MakeListFile collects any visible paths along the "software" and
+// "modules" subdirectories of the overlayfs. A visible path in this
+// context will equate to a software/module combination, or set of
+// combinations that exist after an easybuild command has succeeded in
+// building software into the overlay filesystem.
 func MakeListFile(repo, version, cpuArchSubdir string) (*os.File, error) {
 
 	archDir := archDir(repo, version, cpuArchSubdir)
