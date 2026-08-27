@@ -136,6 +136,22 @@ func runCmd(cmdName string, args []string) ([]string, error) {
  *      configuration of subproc calls to the "find" executable
  */
 
+// findCmd configures a subprocess for running find.
+func findCmd(args []string) ([]string, error) {
+	var result []string
+	prg := []string{"find"}
+	prg = append(prg, args...)
+	cfg := subproc.New(prg)
+	var stdout, stderr bytes.Buffer
+	cfg.Stdout = &stdout
+	cfg.Stderr = &stderr
+	if err := cfg.Run(); err != nil {
+		return []string{}, fmt.Errorf("%s: %w, %s", cfg.Args, err, strings.TrimSpace(stderr.String()))
+	}
+	result = append(result, strings.TrimSpace(stdout.String()))
+	return result, nil
+}
+
 // findModules wraps the "find" command in a transparent os/exec wrapper
 // and configures the args in order to find the
 func findModules(searchPath string) ([]string, error) {
@@ -144,31 +160,18 @@ func findModules(searchPath string) ([]string, error) {
 	modulePath := path.Join(searchPath, "modules")
 
 	// files
-	cfgFiles := subproc.New([]string{"find", modulePath, "-type", "f"})
-
-	var stdout, stderr bytes.Buffer
-
-	cfgFiles.Stdout = &stdout
-	cfgFiles.Stderr = &stderr
-
-	if err := cfgFiles.Run(); err != nil {
-		return []string{}, fmt.Errorf("%s: %w, %s", cfgFiles.Args, err, strings.TrimSpace(stderr.String()))
+	files, ferr := findCmd([]string{modulePath, "-type", "f"})
+	if ferr != nil {
+		return []string{}, ferr
 	}
-	result = append(result, strings.TrimSpace(stdout.String()))
-
-	stdout.Reset()
-	stderr.Reset()
+	result = append(result, files...)
 
 	// symlinks
-	cfgLn := subproc.New([]string{"find", modulePath, "-type", "l"})
-	cfgLn.Stdout = &stdout
-	cfgLn.Stderr = &stderr
-
-	if err := cfgLn.Run(); err != nil {
-		return []string{}, fmt.Errorf("%s: %w, %s", cfgLn.Args, err, strings.TrimSpace(stderr.String()))
+	lns, lnerr := findCmd([]string{modulePath, "-type", "l"})
+	if lnerr != nil {
+		return []string{}, lnerr
 	}
-
-	result = append(result, strings.TrimSpace(stdout.String()))
+	result = append(result, lns...)
 
 	return result, nil
 }
@@ -189,23 +192,17 @@ func findSoftware(searchPath string) ([]string, error) {
 		return result, nil
 	}
 
-	var absPaths []string
-
 	// build the find args
 	// find <match1> ... <matchN> -maxdepth 1 -name easybuild -type d
-	args := append([]string{}, absPaths...)
 	// easybuild dirs
-	args = append(args, "-maxdepth", "1", "-name", "easybuild", "-type", "d")
+	args := append(matches, "-maxdepth", "1", "-name", "easybuild", "-type", "d")
 
-	sRes, err := runCmd("find", args)
+	dirs, err := findCmd(args)
 	if err != nil {
-		log.Println("FindSoftware error: ", err)
 		return []string{}, err
 	}
-
-	for _, easyBuildDir := range sRes {
+	for _, easyBuildDir := range dirs {
 		p := filepath.Dir(filepath.Clean(easyBuildDir))
-
 		result = append(result, p)
 	}
 	return result, nil
