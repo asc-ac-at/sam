@@ -1,6 +1,7 @@
 arch-mapping:
   zen4: x86_64/amd/zen4
   zen5: x86_64/amd/zen5
+  generic: x86_64/generic
 accel-mapping:
   cc80: accel/nvidia/cc80
   cc90: accel/nvidia/cc90

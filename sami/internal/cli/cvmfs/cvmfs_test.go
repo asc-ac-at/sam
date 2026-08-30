@@ -33,6 +33,9 @@ func TestNewCvmfsBuildCmdData(t *testing.T) {
 	if data.Template != buildCmdTmpl {
 		t.Error("Template should be buildCmdTmpl")
 	}
+	if data.Logdir != opts.BuildLogBasePath {
+		t.Errorf("Logdir = %q, want %q", data.Logdir, opts.BuildLogBasePath)
+	}
 }
 
 func TestCvmfsBuildCmdData_Publish(t *testing.T) {
@@ -168,6 +171,62 @@ func TestRenderBuildCmd_PublishCPUOnly(t *testing.T) {
 	}
 }
 
+func TestRenderBuildCmd_PublishLogdir(t *testing.T) {
+	render := func(t *testing.T, data *CvmfsBuildCmdData) string {
+		t.Helper()
+		outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
+		if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+			t.Fatalf("renderBuildCmd failed: %v", err)
+		}
+		content, err := os.ReadFile(outFile)
+		if err != nil {
+			t.Fatalf("Failed to read rendered file: %v", err)
+		}
+		return string(content)
+	}
+
+	t.Run("concrete logdir in failure branch", func(t *testing.T) {
+		opts := optsForTest()
+		data := NewCvmfsBuildCmdData(opts)
+		data.Publish = true
+		data.ArchSubdir = "x86_64/amd/zen4"
+
+		got := render(t, data)
+
+		want := "cp -a /tmp/ " + data.Logdir + "/ctr-tmp"
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered output should contain %q, got: %q", want, got)
+		}
+		if strings.Contains(got, "${LOGDIR}") {
+			t.Errorf("rendered output should not rely on the ${LOGDIR} env var, got: %q", got)
+		}
+		if strings.Contains(got, "{{") {
+			t.Errorf("rendered output should not contain unresolved template placeholders, got: %q", got)
+		}
+	})
+
+	// Pins the current render for an empty --log-basepath: the failure
+	// branch produces the degenerate absolute path /ctr-tmp. If flag
+	// validation starts rejecting an empty base path (TODO-2d836b56
+	// item 3), update or drop this subtest.
+	t.Run("empty basepath renders degenerate path", func(t *testing.T) {
+		opts := optsForTest()
+		opts.BuildLogBasePath = ""
+		data := NewCvmfsBuildCmdData(opts)
+		data.Publish = true
+		data.ArchSubdir = "x86_64/amd/zen4"
+
+		got := render(t, data)
+
+		if data.Logdir != "" {
+			t.Fatalf("expected empty Logdir, got %q", data.Logdir)
+		}
+		if !strings.Contains(got, "cp -a /tmp/ /ctr-tmp") {
+			t.Errorf("expected degenerate render %q, got: %q", "cp -a /tmp/ /ctr-tmp", got)
+		}
+	})
+}
+
 func TestRenderBuildCmd_PublishFalse(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
 	if err != nil {
@@ -255,15 +314,16 @@ func TestRenderBuildCmd_NonZeroSWS(t *testing.T) {
 
 func optsForTest() *shared.Options {
 	return &shared.Options{
-		GitRepo:    "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
-		SWSVariant: "2025.06",
-		Name:       "test-build",
+		GitRepo:          "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
+		SWSVariant:       "2025.06",
+		Name:             "test-build",
+		BuildLogBasePath: "/tmp/sami-test-logs",
 	}
 }
 
 func TestResolveSubdirs(t *testing.T) {
 	cfg := &config.File{
-		ArchMapping:  map[string]string{"zen4": "x86_64/amd/zen4", "zen5": "x86_64/amd/zen5"},
+		ArchMapping:  map[string]string{"zen4": "x86_64/amd/zen4", "zen5": "x86_64/amd/zen5", "generic": "x86_64/generic"},
 		AccelMapping: map[string]string{"cc80": "accel/nvidia/cc80", "cc90": "accel/nvidia/cc90"},
 	}
 
@@ -290,6 +350,19 @@ func TestResolveSubdirs(t *testing.T) {
 		}
 		if accel != "accel/nvidia/cc90" {
 			t.Errorf("accelSubdir = %q, want accel/nvidia/cc90", accel)
+		}
+	})
+
+	t.Run("generic arch via mapping", func(t *testing.T) {
+		arch, accel, err := resolveSubdirs(cfg, "generic", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if arch != "x86_64/generic" {
+			t.Errorf("archSubdir = %q, want x86_64/generic", arch)
+		}
+		if accel != "" {
+			t.Errorf("accelSubdir = %q, want empty (generic is CPU-only)", accel)
 		}
 	})
 
