@@ -2,11 +2,9 @@ package cvmfs
 
 import (
 	_ "embed"
-	"fmt"
 	"os"
 	"path/filepath"
 	"text/template"
-	"time"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
@@ -24,13 +22,7 @@ type CvmfsBuildCmdData struct {
 	CvmfsRepo   string
 	Template    string
 	Name        string
-	Timestamp   string
 	Logdir      string
-}
-
-func timestamp() string {
-	t := time.Now()
-	return fmt.Sprint(t.Format("20060102150405"))
 }
 
 // NewCvmfsBuildCmdData creates a structure with
@@ -41,8 +33,7 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 		LmodInit:   filepath.Join("/cvmfs/software.eessi.io/versions", opts.SWSVariant, "init/lmod/sh"),
 		CvmfsRepo:  "/cvmfs/software.asc.ac.at",
 		Template:   buildCmdTmpl,
-		Name:       "my-software",
-		Timestamp:  timestamp(),
+		Name:       opts.Name,
 		Logdir:     opts.BuildLogBasePath,
 	}
 	// user supplied target files take precedence over changed files in the repo

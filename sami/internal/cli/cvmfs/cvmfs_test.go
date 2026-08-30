@@ -27,8 +27,8 @@ func TestNewCvmfsBuildCmdData(t *testing.T) {
 	if data.CvmfsRepo != "/cvmfs/software.asc.ac.at" {
 		t.Errorf("unexpected CvmfsRepo: %q", data.CvmfsRepo)
 	}
-	if data.Name != "my-software" {
-		t.Errorf("unexpected Name: %q", data.Name)
+	if data.Name != opts.Name {
+		t.Errorf("Name = %q, want %q (from opts)", data.Name, opts.Name)
 	}
 	if data.Template != buildCmdTmpl {
 		t.Error("Template should be buildCmdTmpl")
@@ -61,18 +61,6 @@ func TestNewCvmfsBuildCmdData_DifferentOpts(t *testing.T) {
 
 	if data.SWSVariant != "2026.01" {
 		t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, "2026.01")
-	}
-}
-
-func TestNewCvmfsBuildCmdData_NameHardcoded(t *testing.T) {
-	opts := optsForTest()
-	opts.Name = "custom-build"
-
-	data := NewCvmfsBuildCmdData(opts)
-
-	// Name is hardcoded in NewCvmfsBuildCmdData
-	if data.Name != "my-software" {
-		t.Errorf("Name is hardcoded to %q", data.Name)
 	}
 }
 
