@@ -1,6 +1,8 @@
 package cvmfs
 
 import (
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -306,6 +308,98 @@ func optsForTest() *shared.Options {
 		SWSVariant:       "2025.06",
 		Name:             "test-build",
 		BuildLogBasePath: "/tmp/sami-test-logs",
+	}
+}
+
+func TestRenderBuildCmd_PublishOutputDir(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	opts := optsForTest()
+	data := NewCvmfsBuildCmdData(opts)
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.OutputDir = "/opt/adm/sam-archives"
+
+	outFile := filepath.Join(tmpDir, "build_cmd.sh")
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	got := string(content)
+	if !strings.Contains(got, "--outputDir /opt/adm/sam-archives") {
+		t.Errorf("rendered output should pass the output dir to crtar, got: %q", got)
+	}
+	if !strings.Contains(got, "grep '^TARBALL='") {
+		t.Errorf("rendered output should capture crtar's TARBALL= contract line, got: %q", got)
+	}
+	if strings.Contains(got, "rgw object put") {
+		t.Errorf("rendered output should not contain the rgw upload when RGW is false, got: %q", got)
+	}
+}
+
+func TestRenderBuildCmd_PublishRGW(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	opts := optsForTest()
+	data := NewCvmfsBuildCmdData(opts)
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.OutputDir = "/log/run/sami.xyz"
+	data.RGW = true
+	data.RGWBucket = "sam-archives"
+	data.RGWEndpoint = "https://rgw.example.org"
+
+	outFile := filepath.Join(tmpDir, "build_cmd.sh")
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	got := string(content)
+	if !strings.Contains(got, `rgw object put sam-archives "$(basename "$tb")" "$tb"`) {
+		t.Errorf("rendered output should contain the rgw upload line, got: %q", got)
+	}
+	if !strings.Contains(got, "export AWS_ENDPOINT_URL=https://rgw.example.org") {
+		t.Errorf("rendered output should export the configured endpoint, got: %q", got)
+	}
+}
+
+func TestNewCommand_RGWRequiresPublish(t *testing.T) {
+	opts := optsForTest()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	cmd := NewCommand(opts, logger)
+	if err := cmd.Flags().Set("rgw", "true"); err != nil {
+		t.Fatalf("setting --rgw: %v", err)
+	}
+	if err := cmd.PreRunE(cmd, nil); err == nil || !strings.Contains(err.Error(), "--rgw requires --publish") {
+		t.Errorf("PreRunE with --rgw only = %v, want --rgw requires --publish", err)
+	}
+
+	cmd = NewCommand(opts, logger)
+	if err := cmd.Flags().Set("rgw", "true"); err != nil {
+		t.Fatalf("setting --rgw: %v", err)
+	}
+	if err := cmd.Flags().Set("publish", "true"); err != nil {
+		t.Fatalf("setting --publish: %v", err)
+	}
+	if err := cmd.PreRunE(cmd, nil); err != nil {
+		t.Errorf("PreRunE with --rgw --publish = %v, want nil", err)
 	}
 }
 

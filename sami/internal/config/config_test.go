@@ -41,6 +41,13 @@ sbatch-config:
       mem: 256G
       cpus-per-task: 1
       threads-per-core: 1
+
+arch-mapping:
+  zen4: x86_64/amd/zen4
+
+rgw:
+  bucket: sam-archives
+  endpoint: https://rgw.example.org
 `
 
 // loadFromYAML writes yaml to a temp file and loads it through LoadSbatchConfig,
@@ -86,6 +93,12 @@ func TestLoadSbatchConfig_Canonical(t *testing.T) {
 	if p.ThreadsPerCore != 1 {
 		t.Errorf("ThreadsPerCore = %d, want 1", p.ThreadsPerCore)
 	}
+	if f.RGW.Bucket != "sam-archives" {
+		t.Errorf("RGW.Bucket = %q, want sam-archives", f.RGW.Bucket)
+	}
+	if f.RGW.Endpoint != "https://rgw.example.org" {
+		t.Errorf("RGW.Endpoint = %q, want https://rgw.example.org", f.RGW.Endpoint)
+	}
 }
 
 func TestLoadSbatchConfig_CanonicalFile(t *testing.T) {
@@ -96,6 +109,12 @@ func TestLoadSbatchConfig_CanonicalFile(t *testing.T) {
 	}
 	if len(f.Sbatch.Partitions) != 3 {
 		t.Fatalf("got %d partitions, want 3", len(f.Sbatch.Partitions))
+	}
+	if f.RGW.Bucket != "sam-archives" {
+		t.Errorf("fixture RGW.Bucket = %q, want sam-archives", f.RGW.Bucket)
+	}
+	if f.RGW.Endpoint != "" {
+		t.Errorf("fixture RGW.Endpoint = %q, want empty (comment only)", f.RGW.Endpoint)
 	}
 }
 

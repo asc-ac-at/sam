@@ -6,6 +6,10 @@ accel-mapping:
   cc80: accel/nvidia/cc80
   cc90: accel/nvidia/cc90
 
+rgw:
+  bucket: sam-archives
+  # endpoint: https://rgw.example.org  # optional; else AWS_ENDPOINT_URL env
+
 sbatch-config:
   shared:
     header: "#sami --vanilla"

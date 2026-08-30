@@ -16,6 +16,15 @@ type File struct {
 	Sbatch       SbatchConfig      `yaml:"sbatch-config"`
 	ArchMapping  map[string]string `yaml:"arch-mapping"`
 	AccelMapping map[string]string `yaml:"accel-mapping"`
+	RGW          RGWConfig         `yaml:"rgw"`
+}
+
+// RGWConfig holds the radosgw/S3 settings for the publish path. Bucket is
+// required when --rgw is set. Endpoint is optional; when empty it falls
+// back to the AWS_ENDPOINT_URL environment variable inside the container.
+type RGWConfig struct {
+	Bucket   string `yaml:"bucket"`
+	Endpoint string `yaml:"endpoint"`
 }
 
 // SimpleConfig represents minimal configuration structure

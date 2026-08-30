@@ -15,6 +15,10 @@ import (
 type CvmfsBuildCmdData struct {
 	ArchSubdir  string
 	AccelSubdir string
+	OutputDir   string
+	RGW         bool
+	RGWBucket   string
+	RGWEndpoint string
 	SWSVariant  string
 	Easystacks  []string
 	Publish     bool
