@@ -48,6 +48,25 @@ by the container tool e.g: samctr.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+
+			// 1. setup logging
+			blPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
+			if err != nil {
+				return err
+			}
+
+			// 2. git stuff (technical term)
+			state, err := git.SetupGit(opts, blPath, logger)
+			if err != nil {
+				return err
+			}
+
+			state, err = git.GetChangedFiles(state, logger)
+			if err != nil {
+				return err
+			}
+
+			// 3.1 setup build cmd data
 			data := NewCvmfsBuildCmdData(opts)
 			publish, _ := cmd.Flags().GetBool("publish")
 			data.Publish = publish
@@ -68,24 +87,7 @@ by the container tool e.g: samctr.`,
 				data.AccelSubdir = accelSubdir
 			}
 
-			// 1. setup logging
-			blPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
-			if err != nil {
-				return err
-			}
-
-			// 2. git stuff (technical term)
-			state, err := git.SetupGit(opts, blPath, logger)
-			if err != nil {
-				return err
-			}
-
-			state, err = git.GetChangedFiles(state, logger)
-			if err != nil {
-				return err
-			}
-
-			// 3. render build cmd
+			// 3.2 render build cmd
 			if len(state.TargetFiles) > 0 {
 				data.Easystacks = git.AllTargetFilePaths(state)
 			} else {

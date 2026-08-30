@@ -25,6 +25,7 @@ type CvmfsBuildCmdData struct {
 	Template    string
 	Name        string
 	Timestamp   string
+	Logdir      string
 }
 
 func timestamp() string {
@@ -42,6 +43,7 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 		Template:   buildCmdTmpl,
 		Name:       "my-software",
 		Timestamp:  timestamp(),
+		Logdir:     opts.BuildLogBasePath,
 	}
 	// user supplied target files take precedence over changed files in the repo
 	if len(opts.Files) > 0 {
