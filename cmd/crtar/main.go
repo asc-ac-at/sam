@@ -9,7 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/asc-ac-at/sam/internal/crtar"
@@ -32,6 +32,7 @@ type config struct {
 	outputDir    string
 	repo         string
 	version      bool
+	verbose      bool
 }
 
 // parseFlags parses crtar's command line. The deprecated -cpuArchSubdir
@@ -50,6 +51,7 @@ func parseFlags(args []string, out io.Writer) (*config, error) {
 	fs.StringVar(&c.outputDir, "outputDir", "/opt/adm/sam-archives", "Output directory to save tarball")
 	fs.StringVar(&c.repo, "repo", defaultRepo, "CVMFS repository for which the software was built")
 	fs.BoolVar(&c.version, "version", false, "print version info")
+	fs.BoolVar(&c.verbose, "verbose", false, "enable debug logging")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -75,17 +77,21 @@ func main() {
 		printVersion()
 		return
 	}
+	if cfg.verbose {
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	}
 	if cfg.accelSubdir != "" {
-		log.Printf("note: --accel-subdir %s is not yet applied to the search path", cfg.accelSubdir)
+		slog.Warn("note: --accel-subdir is not yet applied to the search path", "value", cfg.accelSubdir)
 	}
 
 	listFile, err := crtar.MakeListFile(cfg.repo, cfg.eessiVersion, cfg.archSubdir)
 	if err != nil {
-		log.Printf("error making listfile: %s, exiting", err)
+		slog.Error("making list file", "error", err)
 		os.Exit(1)
 	}
 
 	if err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.name, cfg.outputDir, listFile); err != nil {
-		log.Fatalf("execTar failed %s\n", err)
+		slog.Error("execTar failed", "error", err)
+		os.Exit(1)
 	}
 }
