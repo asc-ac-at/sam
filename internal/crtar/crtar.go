@@ -26,8 +26,8 @@ import (
 // FILES_LIST=listFile
 // Change to the workingDir and create a tarball named tarballName using the
 // files in the listFile. Exclude anything mathching the two regular expressions
-// at the front of the args slice.
-func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) error {
+// at the front of the args slice. Returns the absolute path of the tarball.
+func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) (string, error) {
 	var args []string
 	// second exclude is redundant because of the filter below
 	args = append(args, "tar", "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
@@ -40,7 +40,7 @@ func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) error {
 
 	lockFile, lferr := acquireLockfile(tarball)
 	if lferr != nil {
-		return fmt.Errorf("could not acquire lockfile: %w", lferr)
+		return "", fmt.Errorf("could not acquire lockfile: %w", lferr)
 	}
 
 	var stderr bytes.Buffer
@@ -49,11 +49,11 @@ func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) error {
 	cfg.Stderr = &stderr
 
 	if err := cfg.Run(); err != nil {
-		return fmt.Errorf("creating tarball %s failed %w: %s", tarball, err, strings.TrimSpace(stderr.String()))
+		return "", fmt.Errorf("creating tarball %s failed %w: %s", tarball, err, strings.TrimSpace(stderr.String()))
 	}
 	slog.Info("created tarball", "path", tarball)
 	removeLockfile(lockFile)
-	return nil
+	return tarball, nil
 }
 
 // tarballPath constructs a filepath to the tarball that will be subsequently created.

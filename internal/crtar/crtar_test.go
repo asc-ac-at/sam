@@ -225,8 +225,12 @@ func TestExecTar_CreatesTarball(t *testing.T) {
 	listFile := writeListFile(t, outdir, modFile)
 
 	name, cpu := "sami", "amd/zen4"
-	if err := ExecTar(repo, cpu, name, outdir, listFile); err != nil {
+	tb, err := ExecTar(repo, cpu, name, outdir, listFile)
+	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
+	}
+	if !strings.HasPrefix(tb, outdir+string(os.PathSeparator)) || !strings.HasSuffix(tb, "tar.gz") {
+		t.Errorf("returned tarball path %q: want <outdir>/<...>.tar.gz", tb)
 	}
 
 	matches, err := filepath.Glob(filepath.Join(outdir, name+"-*.tar.gz"))
@@ -235,6 +239,9 @@ func TestExecTar_CreatesTarball(t *testing.T) {
 	}
 	if len(matches) != 1 {
 		t.Fatalf("expected 1 tarball, got %d (%v)", len(matches), matches)
+	}
+	if matches[0] != tb {
+		t.Errorf("returned path %q does not match the tarball on disk %q", tb, matches[0])
 	}
 
 	names := readTarNames(t, matches[0])
@@ -268,9 +275,12 @@ func TestExecTar_FailsOnMissingFile(t *testing.T) {
 	missing := filepath.Join(versionsDir(repo), "2025.06", "nope.lua")
 	listFile := writeListFile(t, outdir, missing)
 
-	err := ExecTar(repo, "amd/zen4", "sami", outdir, listFile)
+	tb, err := ExecTar(repo, "amd/zen4", "sami", outdir, listFile)
 	if err == nil {
 		t.Fatal("expected ExecTar to fail for a missing listed file")
+	}
+	if tb != "" {
+		t.Errorf("failed ExecTar returned path %q, want empty", tb)
 	}
 	if !strings.Contains(err.Error(), "creating tarball") {
 		t.Errorf("error should mention the tarball step, got: %v", err)
