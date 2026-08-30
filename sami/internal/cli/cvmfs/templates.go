@@ -2,12 +2,9 @@ package cvmfs
 
 import (
 	_ "embed"
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"text/template"
-	"time"
 
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
@@ -25,12 +22,7 @@ type CvmfsBuildCmdData struct {
 	CvmfsRepo   string
 	Template    string
 	Name        string
-	Timestamp   string
-}
-
-func timestamp() string {
-	t := time.Now()
-	return fmt.Sprint(t.Format("20060102150405"))
+	Logdir      string
 }
 
 // NewCvmfsBuildCmdData creates a structure with
@@ -41,8 +33,8 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 		LmodInit:   filepath.Join("/cvmfs/software.eessi.io/versions", opts.SWSVariant, "init/lmod/sh"),
 		CvmfsRepo:  "/cvmfs/software.asc.ac.at",
 		Template:   buildCmdTmpl,
-		Name:       "my-software",
-		Timestamp:  timestamp(),
+		Name:       opts.Name,
+		Logdir:     opts.BuildLogBasePath,
 	}
 	// user supplied target files take precedence over changed files in the repo
 	if len(opts.Files) > 0 {
@@ -52,26 +44,15 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 }
 
 // resolveSubdirs maps the --arch / --accel / --generic inputs to EESSI
-// subdirectories for crtar. generic targets x86_64/generic directly and
-// needs no config lookup; arch/accel names are resolved through the
+// subdirectories for crtar. arch/accel names are resolved through the
 // mapping tables in the sami config. Returns (archSubdir, accelSubdir).
 // accelSubdir is empty for CPU-only builds.
-func resolveSubdirs(cfg *config.File, arch, accel string, generic bool) (string, string, error) {
-	if generic && arch != "" {
-		return "", "", errors.New("--generic and --arch are mutually exclusive")
-	}
-	if !generic && arch == "" {
-		return "", "", errors.New("--arch (or --generic) is required when publishing")
-	}
+func resolveSubdirs(cfg *config.File, arch, accel string) (string, string, error) {
 	var archSubdir string
-	if generic {
-		archSubdir = config.GenericArchSubdir
-	} else {
-		var err error
-		archSubdir, err = cfg.ArchSubdir(arch)
-		if err != nil {
-			return "", "", err
-		}
+	var err error
+	archSubdir, err = cfg.ArchSubdir(arch)
+	if err != nil {
+		return "", "", err
 	}
 	if accel == "" {
 		return archSubdir, "", nil

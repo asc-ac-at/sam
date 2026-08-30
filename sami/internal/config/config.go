@@ -12,10 +12,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// GenericArchSubdir is the EESSI subdir for generic (non-tuned) x86_64
-// builds, selected with the --generic flag instead of --arch.
-const GenericArchSubdir = "x86_64/generic"
-
 type File struct {
 	Sbatch       SbatchConfig      `yaml:"sbatch-config"`
 	ArchMapping  map[string]string `yaml:"arch-mapping"`

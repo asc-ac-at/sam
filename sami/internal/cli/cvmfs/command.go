@@ -21,7 +21,6 @@ var (
 	publish bool
 	arch    string
 	accel   string
-	generic bool
 )
 
 func NewCommand(opts *shared.Options, logger *slog.Logger) *cobra.Command {
@@ -37,9 +36,6 @@ by the container tool e.g: samctr.`,
 			if opts.Name == "" {
 				return errors.New("--name is required")
 			}
-			if generic && arch != "" {
-				return errors.New("--generic and --arch are mutually exclusive")
-			}
 			if opts.GitBranch != "" && opts.GitCommit != "" {
 				return errors.New("--gitBranch and --gitCommit are mutually exclusive")
 			}
@@ -52,25 +48,6 @@ by the container tool e.g: samctr.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data := NewCvmfsBuildCmdData(opts)
-			publish, _ := cmd.Flags().GetBool("publish")
-			data.Publish = publish
-
-			// when publishing, resolve the crtar subdirs now: the mapping
-			// tables live in the sami config and are needed identically for
-			// both the slurm and the local backend
-			if data.Publish {
-				cfg, err := config.Load()
-				if err != nil {
-					return fmt.Errorf("publishing requires a sami config with arch-mapping: %w", err)
-				}
-				archSubdir, accelSubdir, err := resolveSubdirs(cfg, arch, accel, generic)
-				if err != nil {
-					return err
-				}
-				data.ArchSubdir = archSubdir
-				data.AccelSubdir = accelSubdir
-			}
 
 			// 1. setup logging
 			blPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
@@ -89,7 +66,28 @@ by the container tool e.g: samctr.`,
 				return err
 			}
 
-			// 3. render build cmd
+			// 3.1 setup build cmd data
+			data := NewCvmfsBuildCmdData(opts)
+			publish, _ := cmd.Flags().GetBool("publish")
+			data.Publish = publish
+
+			// when publishing, resolve the crtar subdirs now: the mapping
+			// tables live in the sami config and are needed identically for
+			// both the slurm and the local backend
+			if data.Publish {
+				cfg, err := config.Load()
+				if err != nil {
+					return fmt.Errorf("publishing requires a sami config with arch-mapping: %w", err)
+				}
+				archSubdir, accelSubdir, err := resolveSubdirs(cfg, arch, accel)
+				if err != nil {
+					return err
+				}
+				data.ArchSubdir = archSubdir
+				data.AccelSubdir = accelSubdir
+			}
+
+			// 3.2 render build cmd
 			if len(state.TargetFiles) > 0 {
 				data.Easystacks = git.AllTargetFilePaths(state)
 			} else {
@@ -110,7 +108,6 @@ by the container tool e.g: samctr.`,
 	cmd.Flags().BoolVarP(&publish, "publish", "p", false, "Publish the archive by sending to stratum0 for ingestion")
 	cmd.Flags().StringVar(&arch, "arch", "", "CPU architecture short name (e.g. zen4), resolved via arch-mapping in the sami config")
 	cmd.Flags().StringVar(&accel, "accel", "", "Accelerator short name (e.g. cc90), resolved via accel-mapping in the sami config")
-	cmd.Flags().BoolVar(&generic, "generic", false, "Build for generic x86_64 instead of a tuned --arch")
 
 	shared.RegisterFlags(cmd, opts)
 
