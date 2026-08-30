@@ -3,7 +3,7 @@ GO := /usr/bin/env go
 BUILDDIR = build
 
 SAMI = $(BUILDDIR)/sami
-SAMI_VERSION = 0.0.8rc2
+SAMI_VERSION = 0.0.8
 
 default: sami
 
