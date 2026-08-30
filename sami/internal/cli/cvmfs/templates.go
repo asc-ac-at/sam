@@ -2,7 +2,6 @@ package cvmfs
 
 import (
 	_ "embed"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,26 +51,15 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 }
 
 // resolveSubdirs maps the --arch / --accel / --generic inputs to EESSI
-// subdirectories for crtar. generic targets x86_64/generic directly and
-// needs no config lookup; arch/accel names are resolved through the
+// subdirectories for crtar. arch/accel names are resolved through the
 // mapping tables in the sami config. Returns (archSubdir, accelSubdir).
 // accelSubdir is empty for CPU-only builds.
-func resolveSubdirs(cfg *config.File, arch, accel string, generic bool) (string, string, error) {
-	if generic && arch != "" {
-		return "", "", errors.New("--generic and --arch are mutually exclusive")
-	}
-	if !generic && arch == "" {
-		return "", "", errors.New("--arch (or --generic) is required when publishing")
-	}
+func resolveSubdirs(cfg *config.File, arch, accel string) (string, string, error) {
 	var archSubdir string
-	if generic {
-		archSubdir = config.GenericArchSubdir
-	} else {
-		var err error
-		archSubdir, err = cfg.ArchSubdir(arch)
-		if err != nil {
-			return "", "", err
-		}
+	var err error
+	archSubdir, err = cfg.ArchSubdir(arch)
+	if err != nil {
+		return "", "", err
 	}
 	if accel == "" {
 		return archSubdir, "", nil

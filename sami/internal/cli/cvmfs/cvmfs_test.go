@@ -268,7 +268,7 @@ func TestResolveSubdirs(t *testing.T) {
 	}
 
 	t.Run("arch hit", func(t *testing.T) {
-		arch, accel, err := resolveSubdirs(cfg, "zen4", "", false)
+		arch, accel, err := resolveSubdirs(cfg, "zen4", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -281,7 +281,7 @@ func TestResolveSubdirs(t *testing.T) {
 	})
 
 	t.Run("arch and accel hit", func(t *testing.T) {
-		arch, accel, err := resolveSubdirs(cfg, "zen5", "cc90", false)
+		arch, accel, err := resolveSubdirs(cfg, "zen5", "cc90")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -293,37 +293,8 @@ func TestResolveSubdirs(t *testing.T) {
 		}
 	})
 
-	t.Run("generic", func(t *testing.T) {
-		arch, accel, err := resolveSubdirs(cfg, "", "", true)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if arch != "x86_64/generic" {
-			t.Errorf("archSubdir = %q, want x86_64/generic", arch)
-		}
-		if accel != "" {
-			t.Errorf("accelSubdir = %q, want empty", accel)
-		}
-	})
-
-	t.Run("generic conflicts with arch", func(t *testing.T) {
-		if _, _, err := resolveSubdirs(cfg, "zen4", "", true); err == nil {
-			t.Error("expected error when --generic combined with --arch")
-		}
-	})
-
-	t.Run("neither arch nor generic", func(t *testing.T) {
-		_, _, err := resolveSubdirs(cfg, "", "", false)
-		if err == nil {
-			t.Error("expected error when neither --arch nor --generic given")
-		}
-		if !strings.Contains(err.Error(), "--arch") {
-			t.Errorf("error should mention --arch, got: %v", err)
-		}
-	})
-
 	t.Run("unknown arch errors and lists valid", func(t *testing.T) {
-		_, _, err := resolveSubdirs(cfg, "skylake", "", false)
+		_, _, err := resolveSubdirs(cfg, "skylake", "")
 		if err == nil {
 			t.Error("expected error for unknown arch")
 		}
@@ -335,7 +306,7 @@ func TestResolveSubdirs(t *testing.T) {
 	})
 
 	t.Run("unknown accel errors and lists valid", func(t *testing.T) {
-		_, _, err := resolveSubdirs(cfg, "zen4", "gfx90a", false)
+		_, _, err := resolveSubdirs(cfg, "zen4", "gfx90a")
 		if err == nil {
 			t.Error("expected error for unknown accel")
 		}
