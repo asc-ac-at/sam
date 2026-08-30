@@ -65,6 +65,13 @@ func printVersion() {
 	fmt.Printf("crtar version: %s\n", Version)
 }
 
+// printContract emits the machine-readable line announcing the tarball crtar
+// just created. stdout is the contract channel: callers capture the tarball
+// path with `grep '^TARBALL='`. All diagnostics go to stderr (slog).
+func printContract(w io.Writer, tarball string) {
+	fmt.Fprintf(w, "TARBALL=%s\n", tarball)
+}
+
 func main() {
 	cfg, err := parseFlags(os.Args[1:], os.Stderr)
 	if err != nil {
@@ -90,8 +97,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.name, cfg.outputDir, listFile); err != nil {
+	tarball, err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.name, cfg.outputDir, listFile)
+	if err != nil {
 		slog.Error("execTar failed", "error", err)
 		os.Exit(1)
 	}
+	printContract(os.Stdout, tarball)
 }
