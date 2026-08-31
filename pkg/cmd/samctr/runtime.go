@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package samctr
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/asc-ac-at/sam/internal/samctr"
 )
@@ -42,7 +42,7 @@ func (rs *RuntimeState) SetApptainerBindPaths() {
 	// bind mounts
 	bindCmds := []string{}
 	for _, bm := range rs.AllBindMounts {
-		log.Printf("SetApptainerBindPaths %s", bm.Fmt())
+		slog.Debug("bind path", "bind", bm.Fmt())
 		bindCmds = append(bindCmds, fmt.Sprintf("-B %s", bm.Fmt()))
 	}
 	rs.ApptainerBindPaths = append(rs.ApptainerBindPaths, bindCmds...)

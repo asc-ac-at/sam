@@ -6,7 +6,7 @@ package samctr
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -82,7 +82,7 @@ Examples:
 				}
 			}
 		}
-		log.Printf("args len at dash %d", len(argsAfterDash))
+		slog.Debug("parsed args after dash", "count", len(argsAfterDash))
 		Runtime.ArgsAfterDash = argsAfterDash
 
 		if ToStdout {
