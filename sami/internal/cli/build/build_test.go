@@ -402,11 +402,47 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 		t.Fatalf("Failed to read rendered file: %v", err)
 	}
 	got := string(content)
-	if !strings.Contains(got, `rgw object put sam-archives "$(basename "$tb")" "$tb"`) {
+	if !strings.Contains(got, `rgw object put sam-archives "$bn" "$tb"`) {
 		t.Errorf("rendered output should contain the rgw upload line, got: %q", got)
+	}
+	if !strings.Contains(got, `sha256sum "$bn" > "$bn.sha256"`) {
+		t.Errorf("rendered output should compute the sha256 sidecar, got: %q", got)
+	}
+	if !strings.Contains(got, `rgw object put sam-archives "$bn.sha256"`) {
+		t.Errorf("rendered output should upload the checksum sidecar, got: %q", got)
+	}
+	putIdx := strings.Index(got, `rgw object put sam-archives "$bn" "$tb"`)
+	sidecarIdx := strings.Index(got, `rgw object put sam-archives "$bn.sha256"`)
+	if putIdx < 0 || sidecarIdx < putIdx {
+		t.Errorf("tarball upload must precede the sidecar upload (default-deny sentinel), got:\n%s", got)
 	}
 	if !strings.Contains(got, "export AWS_ENDPOINT_URL=https://rgw.example.org") {
 		t.Errorf("rendered output should export the configured endpoint, got: %q", got)
+	}
+}
+
+// RGWEndpoint empty: no AWS_ENDPOINT_URL export should be rendered
+// (falls back to the ambient AWS_ENDPOINT_URL env, per TODO-35b4c9bc).
+func TestRenderBuildCmd_PublishRGWNoEndpoint(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
+
+	data := NewCvmfsBuildCmdData(optsForTest())
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.OutputDir = "/log/run/sami.xyz"
+	data.RGW = true
+	data.RGWBucket = "sam-archives"
+	data.RGWEndpoint = ""
+
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	if strings.Contains(string(content), "export AWS_ENDPOINT_URL") {
+		t.Errorf("rendered output should not export AWS_ENDPOINT_URL without a configured endpoint, got:\n%s", string(content))
 	}
 }
 

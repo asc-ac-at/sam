@@ -30,8 +30,13 @@ fi
 if [[ "$?" -eq 0 ]]; then
 {{if .Publish}}
     tb="$(crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }} | grep '^TARBALL=' | cut -d= -f2-)"
+    bn="$(basename "$tb")"
+    (cd "$(dirname "$tb")" && sha256sum "$bn" > "$bn.sha256")
+{{- if .RGWEndpoint }}
     export AWS_ENDPOINT_URL={{ .RGWEndpoint }}
-    rgw object put {{ .RGWBucket }} "$(basename "$tb")" "$tb"
+{{ end }}    rgw object put {{ .RGWBucket }} "$bn" "$tb"
+    # sentinel last: pullers only ingest pairs (default-deny)
+    rgw object put {{ .RGWBucket }} "$bn.sha256" "$(dirname "$tb")/$bn.sha256"
 {{else}}
     crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }}
 {{end}}
