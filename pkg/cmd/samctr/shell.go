@@ -6,7 +6,7 @@ package samctr
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	isamctr "github.com/asc-ac-at/sam/internal/samctr"
@@ -24,7 +24,7 @@ func ApptainerShellArg(rs *RuntimeState) string {
 	bindmounts := isamctr.BindMountsApptainerFmt(rs.AllBindMounts)
 	extraOpts := strings.Join(rs.ApptainerCmdOpts, " ")
 	arg := fmt.Sprintf(`'apptainer shell %s %s %s %s'`, fusemounts, bindmounts, extraOpts, rs.ContainerSif)
-	log.Printf("AtpptainerShellArg: %s", arg)
+	slog.Debug("apptainer shell arg", "arg", arg)
 	return arg
 }
 

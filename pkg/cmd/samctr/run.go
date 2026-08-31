@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"time"
@@ -29,7 +29,7 @@ func Runner(prg string, argFmt func(rs *RuntimeState) []string, runtime *Runtime
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	log.Printf("runner %s", cmd)
+	slog.Debug("runner", "cmd", cmd)
 	return cmd.Run()
 }
 
@@ -37,7 +37,6 @@ func Runner(prg string, argFmt func(rs *RuntimeState) []string, runtime *Runtime
 // note that any job will be automatically terminated after the values set by
 // WithTimeout
 func RunSystemShell(runtime *RuntimeState, argFmt func(rs *RuntimeState) string) error {
-	log.Printf("=== Shell Runner Called ===")
 	runtime.SetApptainerBindPaths()
 	arg := argFmt(runtime)
 	ctx, cancel := context.WithTimeout(context.Background(), 72*time.Hour)
@@ -48,18 +47,17 @@ func RunSystemShell(runtime *RuntimeState, argFmt func(rs *RuntimeState) string)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	log.Printf("ShellRunner cmd: %s", cmd)
+	slog.Debug("shell runner", "cmd", cmd)
 	return cmd.Run()
 }
 
 func PullRunner(runtime *RuntimeState) error {
-	log.Printf("=== Pull Runner Called ===")
 	return Runner("apptainer", ApptainerPullArgs, runtime)
 }
 
 // Run a system command and get the output
 func IoRunner(prg, arg string) (string, error) {
-	log.Printf("=== IoRunner -> %s Called ===", prg)
+	slog.Debug("io runner", "prg", prg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, prg, arg)

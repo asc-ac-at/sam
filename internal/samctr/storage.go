@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package samctr
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -59,11 +59,11 @@ type StorageState struct {
 func (opts *StorageOptions) setupStorageFuseMounts() error {
 	if opts.FuseMounts != nil {
 		for i := range opts.FuseMounts {
-			log.Printf("setupStorageFuseMounts: %s %s %s %s\n",
-				opts.FuseMounts[i].Type,
-				opts.FuseMounts[i].FuseCmd,
-				opts.FuseMounts[i].FuseArg,
-				opts.FuseMounts[i].CtrMountpoint,
+			slog.Debug("processing fusemount",
+				"type", opts.FuseMounts[i].Type,
+				"fuse_cmd", opts.FuseMounts[i].FuseCmd,
+				"fuse_arg", opts.FuseMounts[i].FuseArg,
+				"ctr_mountpoint", opts.FuseMounts[i].CtrMountpoint,
 			)
 
 			switch opts.FuseMounts[i].FuseCmd {
@@ -82,11 +82,9 @@ func (opts *StorageOptions) setupStorageFuseMounts() error {
 				work := filepath.Join(opts.RootTmpDir, repoCandidate, "overlay-work")
 				dirs := []string{upper, work}
 				for i := range dirs {
-					log.Printf("setupStorageFuseMounts mkdir: %s", dirs[i])
-					d_err := os.MkdirAll(dirs[i], 0o755)
-					if d_err != nil {
-						log.Printf("failed to created fuse overlay %s", dirs[i])
-						log.Println(d_err)
+					slog.Debug("creating fuse overlay dir", "dir", dirs[i])
+					if err := os.MkdirAll(dirs[i], 0o755); err != nil {
+						return fmt.Errorf("create fuse overlay dir %s: %w", dirs[i], err)
 					}
 				}
 			case "cvmfs2":
@@ -103,7 +101,7 @@ func (opts *StorageOptions) setupStorageFuseMounts() error {
 					// at this point
 					return fmt.Errorf("mkdir %s: %w", opts.FuseMounts[i].FuseArg, d_err)
 				}
-				log.Printf("storage fusemount cvmfs2 (default) created: %s", d)
+				slog.Debug("created storage fusemount dir", "dir", d)
 			}
 		}
 	}

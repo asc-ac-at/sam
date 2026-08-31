@@ -1,12 +1,13 @@
-VERSION := 0.0.8
+VERSION := 0.0.9
 
 BUILDDIR = build
 
 SAMCTR = $(BUILDDIR)/samctr
 SAMGX = $(BUILDDIR)/samgx
 CRTAR = $(BUILDDIR)/crtar
+RGW = $(BUILDDIR)/rgw
 
-EXE = $(SAMCTR) $(SAMGX) $(CRTAR)
+EXE = $(SAMCTR) $(SAMGX) $(CRTAR) $(RGW)
 
 all: $(EXE)
 
@@ -18,6 +19,9 @@ $(SAMGX):
 
 $(CRTAR):
 	go build -ldflags "-X 'main.Version=v$(VERSION)'" -o $@ ./cmd/crtar
+
+$(RGW):
+	go build -ldflags "-X 'main.Version=v$(VERSION)'" -o $@ ./cmd/rgw
 
 
 .PHONY: clean

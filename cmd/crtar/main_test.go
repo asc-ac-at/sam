@@ -93,3 +93,11 @@ func TestParseFlags_UnknownFlag(t *testing.T) {
 		t.Errorf("error should name the unknown flag, got: %v", err)
 	}
 }
+
+func TestPrintContract(t *testing.T) {
+	var buf strings.Builder
+	printContract(&buf, "/out/gh-2.86.0-x86_64-amd-zen4-20260830120000.tar.gz")
+	if buf.String() != "TARBALL=/out/gh-2.86.0-x86_64-amd-zen4-20260830120000.tar.gz\n" {
+		t.Errorf("contract line = %q", buf.String())
+	}
+}

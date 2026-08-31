@@ -145,6 +145,49 @@ func TestFindSoftwareNoMatches(t *testing.T) {
  * easybuild subtree.
  */
 
+// TestFindSoftware_DerivesParentPerPackage catches a bug where findCmd
+// returned find's entire multi-line output as one blob, and the parent-dir
+// derivation in findSoftware was applied to that blob: the first matching
+// package kept its trailing /easybuild, so its tarball entry contained only
+// the metadata subtree — payload directories were silently dropped.
+func TestFindSoftware_DerivesParentPerPackage(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	arch := archDir(repo, "2025.06", "amd/zen4")
+	for _, pkg := range []string{"Go/1.25.7", "gh/2.86.0"} {
+		dir := filepath.Join(arch, "software", pkg, "easybuild")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := findSoftware(arch)
+	if err != nil {
+		t.Fatalf("findSoftware: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("findSoftware returned %d entries, want 2: %v", len(got), got)
+	}
+	for _, p := range got {
+		if strings.HasSuffix(p, "easybuild") {
+			t.Errorf("entry %q still points at the easybuild dir, want the package dir", p)
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("entry %q should exist on disk: %v", p, err)
+		}
+	}
+	want := map[string]bool{
+		filepath.Join(arch, "software", "Go", "1.25.7"): true,
+		filepath.Join(arch, "software", "gh", "2.86.0"): true,
+	}
+	for _, p := range got {
+		if !want[p] {
+			t.Errorf("unexpected entry %q", p)
+		}
+	}
+}
+
 // uniqueRepo returns a repo name unlikely to collide with a real overlay
 // dir or with other test runs.
 func uniqueRepo() string {
@@ -225,8 +268,12 @@ func TestExecTar_CreatesTarball(t *testing.T) {
 	listFile := writeListFile(t, outdir, modFile)
 
 	name, cpu := "sami", "amd/zen4"
-	if err := ExecTar(repo, cpu, name, outdir, listFile); err != nil {
+	tb, err := ExecTar(repo, cpu, name, outdir, listFile)
+	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
+	}
+	if !strings.HasPrefix(tb, outdir+string(os.PathSeparator)) || !strings.HasSuffix(tb, "tar.gz") {
+		t.Errorf("returned tarball path %q: want <outdir>/<...>.tar.gz", tb)
 	}
 
 	matches, err := filepath.Glob(filepath.Join(outdir, name+"-*.tar.gz"))
@@ -235,6 +282,9 @@ func TestExecTar_CreatesTarball(t *testing.T) {
 	}
 	if len(matches) != 1 {
 		t.Fatalf("expected 1 tarball, got %d (%v)", len(matches), matches)
+	}
+	if matches[0] != tb {
+		t.Errorf("returned path %q does not match the tarball on disk %q", tb, matches[0])
 	}
 
 	names := readTarNames(t, matches[0])
@@ -268,9 +318,12 @@ func TestExecTar_FailsOnMissingFile(t *testing.T) {
 	missing := filepath.Join(versionsDir(repo), "2025.06", "nope.lua")
 	listFile := writeListFile(t, outdir, missing)
 
-	err := ExecTar(repo, "amd/zen4", "sami", outdir, listFile)
+	tb, err := ExecTar(repo, "amd/zen4", "sami", outdir, listFile)
 	if err == nil {
 		t.Fatal("expected ExecTar to fail for a missing listed file")
+	}
+	if tb != "" {
+		t.Errorf("failed ExecTar returned path %q, want empty", tb)
 	}
 	if !strings.Contains(err.Error(), "creating tarball") {
 		t.Errorf("error should mention the tarball step, got: %v", err)

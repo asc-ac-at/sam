@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package samctr
 
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +41,7 @@ var AppConfig = &Config{}
 // initConfig should be registered with cobra.OnInitialize(initConfig)
 func initConfig() {
 	if err := LoadConfig(cfgFile, RootCmd); err != nil {
-		log.Printf("warning: failed to load config: %v", err)
+		slog.Warn("failed to load config", "error", err)
 	}
 }
 
@@ -54,7 +54,7 @@ func LoadConfig(confPath string, root *cobra.Command) error {
 		viper.SetConfigFile(confPath)
 	} else {
 		// search for it
-		log.Printf("LoadConfig -> searching for config")
+		slog.Debug("searching for config")
 		xdg := ""
 		xdg = os.Getenv("XDG_CONFIG_HOME")
 		if xdg == "" { // fall back to "$HOME/.config"
@@ -76,7 +76,7 @@ func LoadConfig(confPath string, root *cobra.Command) error {
 			return fmt.Errorf("error reading config: %w", err)
 		}
 	} else {
-		log.Printf("Using config file: %s", viper.ConfigFileUsed())
+		slog.Info("using config file", "path", viper.ConfigFileUsed())
 	}
 
 	// bind flags to viper

@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,8 +26,8 @@ import (
 // FILES_LIST=listFile
 // Change to the workingDir and create a tarball named tarballName using the
 // files in the listFile. Exclude anything mathching the two regular expressions
-// at the front of the args slice.
-func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) error {
+// at the front of the args slice. Returns the absolute path of the tarball.
+func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) (string, error) {
 	var args []string
 	// second exclude is redundant because of the filter below
 	args = append(args, "tar", "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
@@ -40,7 +40,7 @@ func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) error {
 
 	lockFile, lferr := acquireLockfile(tarball)
 	if lferr != nil {
-		return fmt.Errorf("could not acquire lockfile: %w", lferr)
+		return "", fmt.Errorf("could not acquire lockfile: %w", lferr)
 	}
 
 	var stderr bytes.Buffer
@@ -49,11 +49,11 @@ func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) error {
 	cfg.Stderr = &stderr
 
 	if err := cfg.Run(); err != nil {
-		return fmt.Errorf("creating tarball %s failed %w: %s", tarball, err, strings.TrimSpace(stderr.String()))
+		return "", fmt.Errorf("creating tarball %s failed %w: %s", tarball, err, strings.TrimSpace(stderr.String()))
 	}
-	log.Printf("tarball %s created", tarball)
+	slog.Info("created tarball", "path", tarball)
 	removeLockfile(lockFile)
-	return nil
+	return tarball, nil
 }
 
 // tarballPath constructs a filepath to the tarball that will be subsequently created.
@@ -63,7 +63,7 @@ func tarballPath(archSubdir, name, outdir string) string {
 	t := time.Now()
 	ts := t.Format("20060102150405")
 	result := fmt.Sprintf("%s/%s-%s-%s.tar.gz", outdir, name, normalizedArchDir, ts)
-	log.Printf("tarballPath -> %s", result)
+	slog.Debug("resolved tarball path", "path", result)
 	return result
 }
 
@@ -95,7 +95,7 @@ func acquireLockfile(tarballPath string) (*os.File, error) {
 	name := strings.TrimRight(tarballPath, ".tar.gz")
 	lf := fmt.Sprintf("%s.lock", name)
 	lockFilePath := filepath.Clean(lf)
-	log.Printf("acquireLockfile find or create -> %s", lockFilePath)
+	slog.Debug("found or creating lockfile", "path", lockFilePath)
 
 	if _, err := os.Stat(lockFilePath); err == nil { // lockfile found!
 		return nil, fmt.Errorf("lockfile %s already present", lockFilePath)
@@ -104,7 +104,7 @@ func acquireLockfile(tarballPath string) (*os.File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("acquireLockfile failed to create %s: %w", lockFilePath, err)
 		}
-		log.Printf("aquireLockfile created -> %s\n", result.Name())
+		slog.Debug("created lockfile", "path", result.Name())
 		return result, nil
 	}
 }
@@ -135,7 +135,9 @@ func findCmd(args []string) ([]string, error) {
 	if err := cfg.Run(); err != nil {
 		return []string{}, fmt.Errorf("%s: %w, %s", cfg.Args, err, strings.TrimSpace(stderr.String()))
 	}
-	result = append(result, strings.TrimSpace(stdout.String()))
+	if out := strings.TrimSpace(stdout.String()); out != "" {
+		result = strings.Split(out, "\n")
+	}
 	return result, nil
 }
 
@@ -198,10 +200,8 @@ func findSoftware(searchPath string) ([]string, error) {
 // newListFile creates a files.list.txt in workdir
 func newListFile(workdir string) (*os.File, error) {
 	file, err := os.CreateTemp(workdir, "files.list.txt")
-
 	if err != nil {
-		log.Println("error creating ListFile")
-		return nil, err
+		return nil, fmt.Errorf("creating list file in %s: %w", workdir, err)
 	}
 	return file, nil
 }
@@ -220,29 +220,21 @@ func MakeListFile(repo, version, archSubdir string) (*os.File, error) {
 
 	modules, err := findModules(archDir)
 	if err != nil {
-		log.Println("Error finding modules: ", err)
-		log.Println("exiting")
-		os.Exit(1)
+		return nil, fmt.Errorf("finding modules: %w", err)
 	}
 	fileList = append(fileList, modules...)
 
 	software, err := findSoftware(archDir)
 	if err != nil {
-		log.Println("Error finding software: ", err)
-		log.Println("exiting")
-		os.Exit(1)
+		return nil, fmt.Errorf("finding software: %w", err)
 	}
 
 	fileList = append(fileList, software...)
 
-	//for i := range(fileList) {
-	//	fmt.Println(fileList[i])
-	//}
-
 	workdir := versionsDir(repo)
 	tmpfile, err := newListFile(workdir)
 	if err != nil {
-		log.Fatalf("creating tmpfile in %s failed", workdir)
+		return nil, err
 	}
 	// write any files we've found
 	writer := bufio.NewWriter(tmpfile)

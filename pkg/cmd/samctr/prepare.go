@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package samctr
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -76,7 +76,7 @@ func parseHostInjections(c *Config) string {
 	} else { // use default
 		result = DefaultHostInjections
 	}
-	log.Printf("parse host injections: %s\n", result)
+	slog.Debug("parsed host injections", "path", result)
 	return result
 }
 

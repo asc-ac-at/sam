@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package samctr
 
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 )
 
@@ -30,7 +30,7 @@ func NewBindMount(host, ctr, perms string) *BindMount {
 	case "rw":
 		perms_default = "rw"
 	default:
-		log.Printf("Could not create bindmount with %s perms, using default %s", perms, perms_default)
+		slog.Warn("unknown bind mount perms, using rw", "perms", perms)
 	}
 	bm.Perms = perms_default
 	return &bm
