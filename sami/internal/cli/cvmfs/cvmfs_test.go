@@ -108,6 +108,30 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 	}
 }
 
+// TestRenderBuildCmd_HermeticUserNamespace asserts the rendered build script
+// unsets EESSI_USER_INSTALL so EasyBuild never resolves dependencies against
+// the builder's personal user install ($HOME/eessi) - see sami TODO-dd222a56.
+func TestRenderBuildCmd_HermeticUserNamespace(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	data := NewCvmfsBuildCmdData(optsForTest())
+	outFile := filepath.Join(tmpDir, "build_cmd.sh")
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	if !strings.Contains(string(content), "unset EESSI_USER_INSTALL") {
+		t.Errorf("rendered output should unset EESSI_USER_INSTALL, got:\n%s", string(content))
+	}
+}
+
 func TestRenderBuildCmd_PublishTrue(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
 	if err != nil {

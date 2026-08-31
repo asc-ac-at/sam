@@ -8,6 +8,10 @@ ml --force purge
 ml load "EESSI/{{ .SWSVariant }}" "ASC/{{ .SWSVariant }}" \
     && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SWSVariant }} ASC/{{ .SWSVariant }}"
 
+# sami builds are hermetic: drop the builder's user namespace ($HOME/eessi)
+# from eb module/dependency resolution (sami TODO-dd222a56)
+unset EESSI_USER_INSTALL || true
+
 {{ range .Easystacks }}
 echo "Building easystack: {{ . }}"
 stack_file="{{ . }}"
