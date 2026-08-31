@@ -1,4 +1,4 @@
-VERSION := 0.0.9rc2
+VERSION := 0.0.9rc3
 
 BUILDDIR = build
 
