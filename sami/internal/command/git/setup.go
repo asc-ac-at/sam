@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/command"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
 // SetupGit is a generic catch-all function that checks out a git repository at the commit specified

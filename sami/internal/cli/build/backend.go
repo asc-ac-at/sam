@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/sbatch"
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
 // runBackend dispatches on the build backend after build_cmd.sh has been

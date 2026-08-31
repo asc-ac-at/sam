@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 )
 
 // CvmfsBuildCmdData holds all required data to create a build_cmd.sh script
