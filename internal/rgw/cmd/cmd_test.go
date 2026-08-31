@@ -5,7 +5,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -40,6 +42,31 @@ func TestArgCounts(t *testing.T) {
 				t.Errorf("Args(%v) = nil, want error", tc.invalid)
 			}
 		})
+	}
+}
+
+func TestObjectInfoJSONShape(t *testing.T) {
+	// the auto-ingest pull cycle parses `object list --format json`
+	// (sami TODO-2469a100); pin field names + RFC3339 timestamp.
+	row := objectInfo{
+		Key:          "gh-1-x86_64-amd-zen4-20260831.tar.gz",
+		Size:         42,
+		LastModified: time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC),
+	}
+	raw, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var parsed struct {
+		Key          string    `json:"Key"`
+		Size         int64     `json:"Size"`
+		LastModified time.Time `json:"LastModified"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("round-trip unmarshal: %v (payload must stay time.Time-parseable): %s", err, raw)
+	}
+	if parsed.Key != row.Key || parsed.Size != 42 || !parsed.LastModified.Equal(row.LastModified) {
+		t.Errorf("round-trip mismatch: %+v", parsed)
 	}
 }
 
