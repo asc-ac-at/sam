@@ -27,13 +27,15 @@ if [[ "$?" -ne 0 ]]; then
 fi
 {{end}}
 
-{{if .Publish}}
 if [[ "$?" -eq 0 ]]; then
+{{if .Publish}}
     tb="$(crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }} | grep '^TARBALL=' | cut -d= -f2-)"
-{{ if .RGW }}{{ if .RGWEndpoint }}    export AWS_ENDPOINT_URL={{ .RGWEndpoint }}
-{{ end }}    rgw object put {{ .RGWBucket }} "$(basename "$tb")" "$tb"
-{{ end }}else
+    export AWS_ENDPOINT_URL={{ .RGWEndpoint }}
+    rgw object put {{ .RGWBucket }} "$(basename "$tb")" "$tb"
+{{else}}
+    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }}
+{{end}}
+else
     cp -a /tmp/ {{ .Logdir }}/ctr-tmp
 fi
-{{end}}
 

@@ -22,7 +22,6 @@ var (
 	arch      string
 	accel     string
 	outputDir string
-	rgwUpload bool
 )
 
 func NewCommand(opts *shared.Options, logger *slog.Logger) *cobra.Command {
@@ -35,9 +34,6 @@ Typically you run this command when you want to publish software to a
 cvmfs repository. The configuration of the build environment is specified
 by the container tool e.g: samctr.`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if rgwUpload && !publish {
-				return errors.New("--rgw requires --publish")
-			}
 			if opts.Name == "" {
 				return errors.New("--name is required")
 			}
@@ -98,14 +94,12 @@ by the container tool e.g: samctr.`,
 				data.ArchSubdir = archSubdir
 				data.AccelSubdir = accelSubdir
 
-				if rgwUpload {
-					if cfg.RGW.Bucket == "" {
-						return errors.New("--rgw requires an rgw.bucket entry in the sami config")
-					}
-					data.RGW = true
-					data.RGWBucket = cfg.RGW.Bucket
-					data.RGWEndpoint = cfg.RGW.Endpoint
+				if cfg.RGW.Bucket == "" {
+					return errors.New("--publish requires an rgw.bucket entry in the sami config")
 				}
+				data.RGW = true
+				data.RGWBucket = cfg.RGW.Bucket
+				data.RGWEndpoint = cfg.RGW.Endpoint
 			}
 
 			// 3.2 render build cmd
@@ -129,7 +123,6 @@ by the container tool e.g: samctr.`,
 	cmd.Flags().BoolVarP(&publish, "publish", "p", false, "Publish the archive by sending to stratum0 for ingestion")
 	cmd.Flags().StringVar(&arch, "arch", "", "CPU architecture short name (e.g. zen4), resolved via arch-mapping in the sami config")
 	cmd.Flags().StringVar(&accel, "accel", "", "Accelerator short name (e.g. cc90), resolved via accel-mapping in the sami config")
-	cmd.Flags().BoolVar(&rgwUpload, "rgw", false, "Upload the tarball to the radosgw bucket configured in the sami config (requires --publish)")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory where crtar writes the tarball (default: the per-run log directory)")
 
 	shared.RegisterFlags(cmd, opts)
