@@ -145,6 +145,49 @@ func TestFindSoftwareNoMatches(t *testing.T) {
  * easybuild subtree.
  */
 
+// TestFindSoftware_DerivesParentPerPackage catches a bug where findCmd
+// returned find's entire multi-line output as one blob, and the parent-dir
+// derivation in findSoftware was applied to that blob: the first matching
+// package kept its trailing /easybuild, so its tarball entry contained only
+// the metadata subtree — payload directories were silently dropped.
+func TestFindSoftware_DerivesParentPerPackage(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	arch := archDir(repo, "2025.06", "amd/zen4")
+	for _, pkg := range []string{"Go/1.25.7", "gh/2.86.0"} {
+		dir := filepath.Join(arch, "software", pkg, "easybuild")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := findSoftware(arch)
+	if err != nil {
+		t.Fatalf("findSoftware: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("findSoftware returned %d entries, want 2: %v", len(got), got)
+	}
+	for _, p := range got {
+		if strings.HasSuffix(p, "easybuild") {
+			t.Errorf("entry %q still points at the easybuild dir, want the package dir", p)
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("entry %q should exist on disk: %v", p, err)
+		}
+	}
+	want := map[string]bool{
+		filepath.Join(arch, "software", "Go", "1.25.7"): true,
+		filepath.Join(arch, "software", "gh", "2.86.0"): true,
+	}
+	for _, p := range got {
+		if !want[p] {
+			t.Errorf("unexpected entry %q", p)
+		}
+	}
+}
+
 // uniqueRepo returns a repo name unlikely to collide with a real overlay
 // dir or with other test runs.
 func uniqueRepo() string {
