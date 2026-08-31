@@ -16,6 +16,15 @@ import (
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/sbatch"
 )
 
+// validatePublish enforces the publish invariant: uploading the tarball to
+// the radosgw bucket requires the bucket (and optionally endpoint) configured.
+func validatePublish(cfg *config.File) error {
+	if cfg.RGW.Bucket == "" {
+		return errors.New("--publish requires an rgw.bucket entry in the sami config")
+	}
+	return nil
+}
+
 var (
 	ctrTool   string
 	publish   bool
@@ -94,8 +103,8 @@ by the container tool e.g: samctr.`,
 				data.ArchSubdir = archSubdir
 				data.AccelSubdir = accelSubdir
 
-				if cfg.RGW.Bucket == "" {
-					return errors.New("--publish requires an rgw.bucket entry in the sami config")
+				if err := validatePublish(cfg); err != nil {
+					return err
 				}
 				data.RGW = true
 				data.RGWBucket = cfg.RGW.Bucket

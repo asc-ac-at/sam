@@ -1,15 +1,13 @@
 package build
 
 import (
-	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 )
 
 func TestNewCvmfsBuildCmdData(t *testing.T) {
@@ -251,6 +249,7 @@ func TestRenderBuildCmd_PublishFalse(t *testing.T) {
 	opts := optsForTest()
 	data := NewCvmfsBuildCmdData(opts)
 	data.Publish = false
+	data.OutputDir = data.Logdir // RunE defaults an empty output-dir to the per-run log dir
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	err = renderBuildCmd(buildCmdTmpl, data, outFile)
@@ -260,8 +259,14 @@ func TestRenderBuildCmd_PublishFalse(t *testing.T) {
 
 	content, _ := os.ReadFile(outFile)
 	got := string(content)
-	if strings.Contains(got, "crtar") {
-		t.Error("rendered output should not contain crtar when Publish is false")
+	if !strings.Contains(got, "crtar") {
+		t.Errorf("non-publish runs still tarball the overlay (plain crtar), got: %q", got)
+	}
+	if strings.Contains(got, "TARBALL=") {
+		t.Errorf("non-publish should not capture the TARBALL= contract line, got: %q", got)
+	}
+	if strings.Contains(got, "rgw") {
+		t.Errorf("non-publish should not render any rgw upload, got: %q", got)
 	}
 }
 
@@ -335,7 +340,9 @@ func optsForTest() *shared.Options {
 	}
 }
 
-func TestRenderBuildCmd_PublishOutputDir(t *testing.T) {
+// TestRenderBuildCmd_LegacyNFSDrop pins the legacy transport: no --publish,
+// tarball dropped straight into the NFS-shared archives dir and left there.
+func TestRenderBuildCmd_LegacyNFSDrop(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -344,7 +351,7 @@ func TestRenderBuildCmd_PublishOutputDir(t *testing.T) {
 
 	opts := optsForTest()
 	data := NewCvmfsBuildCmdData(opts)
-	data.Publish = true
+	data.Publish = false
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.OutputDir = "/opt/adm/sam-archives"
 
@@ -361,11 +368,11 @@ func TestRenderBuildCmd_PublishOutputDir(t *testing.T) {
 	if !strings.Contains(got, "--outputDir /opt/adm/sam-archives") {
 		t.Errorf("rendered output should pass the output dir to crtar, got: %q", got)
 	}
-	if !strings.Contains(got, "grep '^TARBALL='") {
-		t.Errorf("rendered output should capture crtar's TARBALL= contract line, got: %q", got)
+	if strings.Contains(got, "TARBALL=") {
+		t.Errorf("legacy drop should not capture the TARBALL= contract line, got: %q", got)
 	}
-	if strings.Contains(got, "rgw object put") {
-		t.Errorf("rendered output should not contain the rgw upload when RGW is false, got: %q", got)
+	if strings.Contains(got, "rgw") {
+		t.Errorf("legacy drop should not render any rgw upload, got: %q", got)
 	}
 }
 
@@ -403,27 +410,15 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 	}
 }
 
-func TestNewCommand_RGWRequiresPublish(t *testing.T) {
-	opts := optsForTest()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	cmd := NewCommand(opts, logger)
-	if err := cmd.Flags().Set("rgw", "true"); err != nil {
-		t.Fatalf("setting --rgw: %v", err)
-	}
-	if err := cmd.PreRunE(cmd, nil); err == nil || !strings.Contains(err.Error(), "--rgw requires --publish") {
-		t.Errorf("PreRunE with --rgw only = %v, want --rgw requires --publish", err)
+func TestValidatePublish_RequiresRGWBucket(t *testing.T) {
+	noBucket := &config.File{}
+	if err := validatePublish(noBucket); err == nil {
+		t.Error("validatePublish with empty rgw.bucket: got nil, want an error")
 	}
 
-	cmd = NewCommand(opts, logger)
-	if err := cmd.Flags().Set("rgw", "true"); err != nil {
-		t.Fatalf("setting --rgw: %v", err)
-	}
-	if err := cmd.Flags().Set("publish", "true"); err != nil {
-		t.Fatalf("setting --publish: %v", err)
-	}
-	if err := cmd.PreRunE(cmd, nil); err != nil {
-		t.Errorf("PreRunE with --rgw --publish = %v, want nil", err)
+	withBucket := &config.File{RGW: config.RGWConfig{Bucket: "sam-archives"}}
+	if err := validatePublish(withBucket); err != nil {
+		t.Errorf("validatePublish with rgw.bucket set = %v, want nil", err)
 	}
 }
 
