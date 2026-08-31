@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-    (c) 2025 Adam McCartney <adam@mur.at>
+   (c) 2025 Adam McCartney <adam@mur.at>
 */
 package samctr
 
@@ -18,6 +18,7 @@ var (
 	ResumePath            string
 	RootTmpDirPrefix      string
 	ToStdout              bool
+	Verbose               bool
 	WriteableRepositories []string
 )
 
@@ -32,6 +33,7 @@ func registerFlags(root *cobra.Command) {
 	root.PersistentFlags().StringVarP(&RootTmpDirPrefix, "root-tmp-dir-prefix", "p", "sam.", "Prefix to use for the root tmp directory on host")
 	root.PersistentFlags().StringVarP(&Nvidia, "nvidia", "n", "all", "Enable container for use with Nvidia gpu")
 	root.PersistentFlags().BoolVar(&ToStdout, "to-stdout", false, "Do not run final command. Print to stdout instead")
+	root.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "Enable debug logging")
 	root.PersistentFlags().StringSliceVarP(&WriteableRepositories, "writeable-repositories", "w", []string{}, "CVMFS repository mouned with writeable overlay filesystem")
 	root.PersistentFlags().StringVar(&FuseCmdRW, "fuse", "fuse-overlayfs", "Fuse implementation to use for overlay (writeable) filesystem")
 }
