@@ -26,5 +26,5 @@ func main() {
 		Level: logLevel,
 	}
 	logger := logging.NewLogger(os.Stdout, cfg)
-	cmd.Execute(logger)
+	cmd.Execute(opts, logger)
 }

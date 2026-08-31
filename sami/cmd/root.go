@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/build"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -20,16 +21,12 @@ var rootCmd = &cobra.Command{
 
 Created for use at the Austrian Scientific Computing (ASC) Research Center.`,
 	TraverseChildren: true,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute(logger *slog.Logger) {
-
-	rootCmd.AddCommand(build.NewCommand(logger))
+func Execute(opts *shared.Options, logger *slog.Logger) {
+	rootCmd.AddCommand(build.NewCommand(opts, logger))
 
 	err := rootCmd.Execute()
 	if err != nil {

@@ -1,4 +1,4 @@
-package cvmfs
+package build
 
 import (
 	"io"
@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
 func TestNewCvmfsBuildCmdData(t *testing.T) {

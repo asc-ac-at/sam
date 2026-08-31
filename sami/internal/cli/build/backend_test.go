@@ -1,4 +1,4 @@
-package cvmfs
+package build
 
 import (
 	"log/slog"
@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/config"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging/buildlog"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 )
 
 // testLogPaths mirrors what RunE builds before calling runBackend; only
