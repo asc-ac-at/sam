@@ -135,7 +135,9 @@ func findCmd(args []string) ([]string, error) {
 	if err := cfg.Run(); err != nil {
 		return []string{}, fmt.Errorf("%s: %w, %s", cfg.Args, err, strings.TrimSpace(stderr.String()))
 	}
-	result = append(result, strings.TrimSpace(stdout.String()))
+	if out := strings.TrimSpace(stdout.String()); out != "" {
+		result = strings.Split(out, "\n")
+	}
 	return result, nil
 }
 
