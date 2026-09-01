@@ -8,7 +8,7 @@ import (
 func TestNewOptions_Defaults(t *testing.T) {
 	opts := NewOptions()
 
-	if opts.GitRepo != "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer" {
+	if opts.GitRepo != "git@gitlab.tuwien.ac.at:vsc/software-stacks/asc-software-layer" {
 		t.Errorf("unexpected GitRepo: %q", opts.GitRepo)
 	}
 	if opts.SWSVariant != "2025.06" {

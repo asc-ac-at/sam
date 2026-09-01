@@ -2,7 +2,7 @@
 Copyright © 2026 Adam McCartney
 // SPDX-License-Identifier: MIT
 */
-package cmd
+package sami
 
 import (
 	"log/slog"

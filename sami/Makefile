@@ -11,7 +11,7 @@ sami: $(SAMI)
 
 $(SAMI): cmd/sami/main.go
 	mkdir -p $(BUILDDIR)
-	$(GO) build -ldflags "-X 'gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/cmd.version=v$(SAMI_VERSION)'" -o $@ $^
+	$(GO) build -ldflags "-X 'gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/pkg/cmd/sami.version=v$(SAMI_VERSION)'" -o $@ $^
 
 
 .phony: clean

@@ -1,7 +1,7 @@
 /*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
+Copyright © 2026 Adam McCartney <adam@mur.at>
 */
-package cmd
+package sami
 
 import (
 	"fmt"

@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"os"
 
-	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/cmd"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/cli/shared"
 	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/internal/logging"
+	"gitlab.tuwien.ac.at/vsc/software-stacks/sami.git/pkg/cmd/sami"
 )
 
 func main() {
@@ -26,5 +26,5 @@ func main() {
 		Level: logLevel,
 	}
 	logger := logging.NewLogger(os.Stdout, cfg)
-	cmd.Execute(opts, logger)
+	sami.Execute(opts, logger)
 }
