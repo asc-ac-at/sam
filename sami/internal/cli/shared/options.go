@@ -30,7 +30,7 @@ func ParseBackend(s string) (Backend, error) {
 type Options struct {
 	GitBranch        string
 	GitCommit        string
-	GitRepo          string   `flag:"git-repo" default:"https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer"`
+	GitRepo          string   `flag:"git-repo" default:"git@gitlab.tuwien.ac.at:vsc/software-stacks/asc-software-layer"`
 	GitMergeReqId    int      `flag:"git-mr-id" default:"0"`
 	SWSVariant       string   `flag:"sws-variant" default:"2025.06"`
 	Name             string   `flag:"name"`
@@ -43,7 +43,7 @@ type Options struct {
 
 func NewOptions() *Options {
 	return &Options{
-		GitRepo:          "https://gitlab.tuwien.ac.at/vsc/software-stacks/asc-software-layer",
+		GitRepo:          "git@gitlab.tuwien.ac.at:vsc/software-stacks/asc-software-layer",
 		SWSVariant:       "2025.06",
 		BuildBackend:     string(BackendLocal),
 		BuildLogBasePath: "/opt/adm/asc-software-stack",
