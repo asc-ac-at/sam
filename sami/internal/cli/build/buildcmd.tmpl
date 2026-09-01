@@ -29,6 +29,12 @@ fi
 
 if [[ "$?" -eq 0 ]]; then
 {{if .Publish}}
+    rgw_creds=$HOME/.config/rgw/sam.env
+    if [ ! -f ${rgw_creds} ]; then
+        echo "ERR - build_cmd.sh failed to publish, missing credentials ${rgw_creds}. more info: https://colab.tuwien.ac.at/spaces/VSC/pages/719914296/rgw+rados+gateway+cli"
+        exit 1
+    fi
+    source ${rgw_creds}
     tb="$(crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }} | grep '^TARBALL=' | cut -d= -f2-)"
     bn="$(basename "$tb")"
     (cd "$(dirname "$tb")" && sha256sum "$bn" > "$bn.sha256")
