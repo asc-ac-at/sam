@@ -6,13 +6,16 @@ build environments used by the software and modules working group at the
 ASC Research Center. The sam working group uses EESSI[^1] as a base for
 the software stack that is provided on the ASC clusters.
 
-# sami
+
+## programs
+
+### sami
 
 Command line tool for building and installing software. Primarily
 used to trigger a software build and optionally publish it to a cvmfs
 stratum0 server.
 
-# samctr
+### samctr
 
 A simple wrapper around some apptainer commands. Why the wrapper? The
 use case that is being targeted by `samctr` is to create a portable
@@ -25,13 +28,13 @@ to submit software build + publish jobs as `sbatch` scripts.
 Most of the login implemented in `samctr` is derived from the
 `eessi_container.sh` script authored by Thomas Roeblitz[^4].
 
-# crtar
+### crtar
 
 This is a simple program that can be used to create tarballs, it is based on a
 bash function defined in the `build_container.sh` script used on the harbok
 cluster at University of Groeningen[^2].
 
-# rgw
+### rgw
 
 `rgw` is a wrapper above the AWS s3 go sdk. It provides a minimal set of
 CRUD-like operations on buckets and objects.
@@ -39,7 +42,10 @@ CRUD-like operations on buckets and objects.
 In the context of building software, it is used as a way to transport
 finished ".tar.gz" files between build nodes and the stratum0 server.
 
-# pipeline
+
+## pipeline
+
+The programs listed above are designed for use in a pipeline:
 
 
 ```
@@ -58,6 +64,7 @@ finished ".tar.gz" files between build nodes and the stratum0 server.
    |                                                           |         (radosgw, Ceph)
    +-----------------------------------------------------------+
 ```
+
 
 
 ## Installation
@@ -124,7 +131,7 @@ writeable_repos: ["speedy.repo"]
 fuse_cmd_rw: fuse-overlayfs
 ```
 
-### shell
+### shell:
 
 This can be used to launch an interactive shell with a specific config.
 
@@ -204,8 +211,6 @@ submit the job with sbatch:
 sbatch build_go1250_jobscript.sh
 ```
 
-
-# Footnotes
 
 [^1]: European Environment For Scientific Software Installations <https://eessi.io>
 [^2]: <https://gitrepo.service.rug.nl/cit-hpc/habrok/cit-hpc-easybuild/-/blob/main/jobscripts/habrok/build_container.sh?ref_type=heads>
