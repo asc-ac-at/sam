@@ -1,0 +1,12 @@
+stages:
+  - test
+
+variables:
+  GOFLAGS: "-mod=mod"
+
+test:
+  stage: test
+  image: golang:1.25.0
+  script:
+    - go vet ./...
+    - go test -v -race ./...

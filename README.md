@@ -1,22 +1,23 @@
-# SAM - Software and Modules
+SAM - build tools for software and modules
+==========================================
 
 This repo contains some programs used to generate the containerized
 build environments used by the software and modules working group at the
 ASC Research Center. The sam working group uses EESSI[^1] as a base for
-the software stack that is provided on the ASC cluster.
+the software stack that is provided on the ASC clusters.
 
-# crtar
+# sami
 
-This is a simple program that can be used to create tarballs, it is based on a
-bash function defined in the `build_container.sh` script used on the harbok
-cluster at University of Groeningen[^2].
+Command line tool for building and installing software. Primarily
+used to trigger a software build and optionally publish it to a cvmfs
+stratum0 server.
 
 # samctr
 
 A simple wrapper around some apptainer commands. Why the wrapper? The
 use case that is being targeted by `samctr` is to create a portable
 build environment for cvmfs[^3] repositories, ahead of publishing newly
-built software to a stratum0. 
+built software to a stratum0.
 
 Part of the motivation for creating this program was to make it easier
 to submit software build + publish jobs as `sbatch` scripts.
@@ -24,8 +25,48 @@ to submit software build + publish jobs as `sbatch` scripts.
 Most of the login implemented in `samctr` is derived from the
 `eessi_container.sh` script authored by Thomas Roeblitz[^4].
 
+# crtar
+
+This is a simple program that can be used to create tarballs, it is based on a
+bash function defined in the `build_container.sh` script used on the harbok
+cluster at University of Groeningen[^2].
+
+# rgw
+
+`rgw` is a wrapper above the AWS s3 go sdk. It provides a minimal set of
+CRUD-like operations on buckets and objects.
+
+In the context of building software, it is used as a way to transport
+finished ".tar.gz" files between build nodes and the stratum0 server.
+
+# pipeline
+
+
+```
+   +------------------- (build machine) -----------------------+
+   |                                                           |
+   |  sami build --publish                                     |
+   |    |  renders build_cmd.sh, picks backend (local/sbatch)  |
+   |    v                                                      |
+   |  samctr exec  <build_cmd.sh>     (build container)        |
+   |    |   eb -r --easystack ...     (builds into overlay)    |
+   |    v                                                      |
+   |  crtar  overlay-upper -> tarball                          |
+   |    |   prints TARBALL=<path>; sha256 sidecar              |
+   |    v                                                      |
+   |  rgw object put  tarball, then sidecar  ------------------+-------> bucket sam-archives
+   |                                                           |         (radosgw, Ceph)
+   +-----------------------------------------------------------+
+```
+
+
 ## Installation
 
+### sami
+
+```
+go install github.com/asc-ac-at/sam/cmd/sami@latest
+```
 
 ### samctr
 ```
@@ -37,6 +78,14 @@ go install github.com/asc-ac-at/sam/cmd/samctr@latest
 ```
 go install github.com/asc-ac-at/sam/cmd/crtar@latest
 ```
+
+### rgw
+
+```
+go install github.com/asc-ac-at/sam/cmd/rgw@latest
+```
+
+
 ## Examples
 
 ### config.yaml

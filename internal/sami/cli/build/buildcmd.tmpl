@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+# General setup
+source {{ .LmodInit }}
+export EESSI_PROJECT_INSTALL={{ .CvmfsRepo }}
+
+ml --force purge
+ml load "EESSI/{{ .SWSVariant }}" "ASC/{{ .SWSVariant }}" \
+    && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SWSVariant }} ASC/{{ .SWSVariant }}"
+
+# sami builds are hermetic: drop the builder's user namespace ($HOME/eessi)
+# from eb module/dependency resolution (sami TODO-dd222a56)
+unset EESSI_USER_INSTALL || true
+
+{{ range .Easystacks }}
+echo "Building easystack: {{ . }}"
+stack_file="{{ . }}"
+if [ ! -f ${stack_file} ]; then
+    printf "ERR - file not found ${stack_file}"
+    exit 1
+fi
+
+eb -r --easystack {{ . }}
+if [[ "$?" -ne 0 ]]; then
+    printf "ERR - easybuild failed for ${stack_file}"
+	exit 1
+fi
+{{end}}
+
+if [[ "$?" -eq 0 ]]; then
+{{if .Publish}}
+    rgw_creds=$HOME/.config/rgw/sam.env
+    if [ ! -f ${rgw_creds} ]; then
+        echo "ERR - build_cmd.sh failed to publish, missing credentials ${rgw_creds}. more info: https://colab.tuwien.ac.at/spaces/VSC/pages/719914296/rgw+rados+gateway+cli"
+        exit 1
+    fi
+    source ${rgw_creds}
+    tb="$(crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }} | grep '^TARBALL=' | cut -d= -f2-)"
+    bn="$(basename "$tb")"
+    (cd "$(dirname "$tb")" && sha256sum "$bn" > "$bn.sha256")
+{{- if .RGWEndpoint }}
+    export AWS_ENDPOINT_URL={{ .RGWEndpoint }}
+{{ end }}    rgw object put {{ .RGWBucket }} "$bn" "$tb"
+    # sentinel last: pullers only ingest pairs (default-deny)
+    rgw object put {{ .RGWBucket }} "$bn.sha256" "$(dirname "$tb")/$bn.sha256"
+{{else}}
+    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }}
+{{end}}
+else
+    cp -a /tmp/ {{ .Logdir }}/ctr-tmp
+fi
+
