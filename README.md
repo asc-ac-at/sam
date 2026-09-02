@@ -4,7 +4,7 @@ SAM - build tools for software and modules
 This repo contains some programs used to generate the containerized
 build environments used by the software and modules working group at the
 ASC Research Center. The sam working group uses EESSI[^1] as a base for
-the software stack that is provided on the ASC cluster.
+the software stack that is provided on the ASC clusters.
 
 # sami
 
@@ -17,7 +17,7 @@ stratum0 server.
 A simple wrapper around some apptainer commands. Why the wrapper? The
 use case that is being targeted by `samctr` is to create a portable
 build environment for cvmfs[^3] repositories, ahead of publishing newly
-built software to a stratum0. 
+built software to a stratum0.
 
 Part of the motivation for creating this program was to make it easier
 to submit software build + publish jobs as `sbatch` scripts.
@@ -33,8 +33,11 @@ cluster at University of Groeningen[^2].
 
 # rgw
 
-<TODO>
+`rgw` is a wrapper above the AWS s3 go sdk. It provides a minimal set of
+CRUD-like operations on buckets and objects.
 
+In the context of building software, it is used as a way to transport
+finished ".tar.gz" files between build nodes and the stratum0 server.
 
 # pipeline
 
@@ -75,6 +78,14 @@ go install github.com/asc-ac-at/sam/cmd/samctr@latest
 ```
 go install github.com/asc-ac-at/sam/cmd/crtar@latest
 ```
+
+### rgw
+
+```
+go install github.com/asc-ac-at/sam/cmd/rgw@latest
+```
+
+
 ## Examples
 
 ### config.yaml
