@@ -1,0 +1,43 @@
+# Example configuration for sami.
+#
+# Partition keys are free-form names; sami looks up the key given on the
+# command line in sbatch-config.partitions to render the sbatch headers.
+# The qos, bucket, and endpoint values below are placeholders -- set them
+# for your site.
+
+arch-mapping:
+  zen4: x86_64/amd/zen4
+  zen5: x86_64/amd/zen5
+accel-mapping:
+  cc80: accel/nvidia/cc80
+  cc90: accel/nvidia/cc90
+
+sbatch-config:
+  shared:
+    # rendered verbatim as the first line of every sbatch script
+    header: "#sami --vanilla"
+  partitions:
+    zen4_gpu:
+      qos: standard
+      gres: "gpu:1"
+      ntasks: 32
+      mem: 256G
+      cpus-per-task: 1
+      threads-per-core: 1
+    zen4_cpu:
+      qos: standard
+      ntasks: 32
+      mem: 256G
+      cpus-per-task: 1
+      threads-per-core: 2
+    zen5_gpu:
+      qos: standard
+      gres: "gpu:1"
+      ntasks: 32
+      mem: 256G
+      cpus-per-task: 1
+      threads-per-core: 1
+
+rgw:
+  bucket: sam-archives
+  endpoint: https://s3.example.com
