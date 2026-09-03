@@ -2,8 +2,8 @@ package easybuild
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
-	"strings"
 )
 
 // Easystack reprents a file containing multiple easybuild commands.
@@ -33,16 +33,18 @@ func NewEasystack(path string) (*Easystack, error) {
 var ebVersionRe = regexp.MustCompile(`(?:^|[^0-9A-Za-z])eb_(\d+\.\d+\.\d+)-`)
 
 // EbVersionFromPath extracts an easybuild version from the path string.
-// Expects the path to use the convesion of passing "eb_<VER>"
+// Expects the filename to use the convention of passing "eb_<VER>".
+// The filename governs; directory components are ignored.
 func EbVersionFromPath(path string) string {
-	res := ebVersionRe.FindString(path)
-	res = strings.TrimLeft(res, "_eb")
-	res = strings.TrimRight(res, "-")
-	return res
+	m := ebVersionRe.FindStringSubmatch(filepath.Base(path))
+	if m == nil {
+		return ""
+	}
+	return m[1]
 }
 
 // EbModuleName is the format the we will use for the Easystack.EbVersion
 // It represents an argument that gets passed to the module command
 func EbModuleName(ver string) string {
-	return fmt.Sprintf("Easybuild/%s", ver)
+	return fmt.Sprintf("EasyBuild/%s", ver)
 }
