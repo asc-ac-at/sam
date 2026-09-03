@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 
+# sami builds are hermetic: drop the builder's user namespace ($HOME/eessi)
+unset EESSI_USER_INSTALL || true
 # General setup
 export EESSI_SITE_INSTALL=1
 export EESSI_SITE_SOFTWARE_PREFIX={{ .CvmfsRepo }}
+{{ if .AccelSubdir }}
+export EESSI_ACCELERATOR_TARGET_OVERRIDE={{ .AccelSubdir }}
+{{ end }}
 
 source {{ .LmodInit }}
-
-# sami builds are hermetic: drop the builder's user namespace ($HOME/eessi)
-# from eb module/dependency resolution (sami TODO-dd222a56)
-unset EESSI_USER_INSTALL || true
 
 ml --force purge
 ml load "EESSI/{{ .SWSVariant }}"
@@ -17,14 +18,14 @@ ml load "EESSI/{{ .SWSVariant }}"
 ml load EESSI-extend
 ml load {{ .EbVersion }}
 
-echo "Building easystack: {{ . }}"
+echo "Building easystack: {{ .Path }}"
 stack_file="{{ .Path }}"
 if [ ! -f ${stack_file} ]; then
     printf "ERR - file not found ${stack_file}"
     exit 1
 fi
 
-eb -r --easystack {{ . }}
+eb -r --easystack ${stack_file}
 if [[ "$?" -ne 0 ]]; then
     printf "ERR - easybuild failed for ${stack_file}"
 	exit 1
