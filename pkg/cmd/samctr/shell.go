@@ -26,7 +26,7 @@ func ApptainerShellArg(rs *RuntimeState) string {
 
 	bindmounts := isamctr.BindMountsApptainerFmt(rs.AllBindMounts)
 	extraOpts := strings.Join(rs.ApptainerCmdOpts, " ")
-	arg := fmt.Sprintf(`'apptainer shell %s %s %s %s'`, fusemounts, bindmounts, extraOpts, rs.ContainerSif)
+	arg := fmt.Sprintf(`apptainer shell %s %s %s %s`, fusemounts, bindmounts, extraOpts, rs.ContainerSif)
 	slog.Debug("apptainer shell arg", "arg", arg)
 	return arg
 }

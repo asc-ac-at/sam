@@ -28,7 +28,7 @@ func ApptainerExecArg(rs *RuntimeState) string {
 	extraOpts := strings.Join(rs.ApptainerCmdOpts, " ")
 
 	prg := strings.Join(rs.ArgsAfterDash, " ")
-	arg := fmt.Sprintf(`'apptainer exec %s %s %s %s %s'`, fusemounts, bindmounts, extraOpts, rs.ContainerSif, prg)
+	arg := fmt.Sprintf(`apptainer exec %s %s %s %s %s`, fusemounts, bindmounts, extraOpts, rs.ContainerSif, prg)
 
 	return arg
 }
@@ -90,7 +90,7 @@ Examples:
 
 		execArg := ApptainerExecArg(Runtime)
 		if ToStdout {
-			fmt.Printf("/bin/sh -c apptainer %s\n", execArg)
+			fmt.Printf("/bin/sh -c %s\n", execArg)
 			return
 		} else {
 			cfg := subproc.New([]string{"/bin/sh", "-c", execArg})

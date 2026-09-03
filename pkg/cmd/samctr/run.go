@@ -41,8 +41,9 @@ func RunSystemShell(runtime *RuntimeState, argFmt func(rs *RuntimeState) string)
 	arg := argFmt(runtime)
 	ctx, cancel := context.WithTimeout(context.Background(), 72*time.Hour)
 	defer cancel()
-	// be careful to quote the arg ... some opts may contain literal quotes
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", fmt.Sprintf(`'%s'`, arg))
+	// pass the arg line as-is; needed quoting (e.g. fusemount "container:..."
+	// specs) is already present in the returned string and sh parses it
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", arg)
 	cmd.Env = append(os.Environ(), runtime.Environ...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
