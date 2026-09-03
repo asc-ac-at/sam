@@ -27,13 +27,16 @@ import (
 // Change to the workingDir and create a tarball named tarballName using the
 // files in the listFile. Exclude anything mathching the two regular expressions
 // at the front of the args slice. Returns the absolute path of the tarball.
-func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) (string, error) {
+// accelSubdir may be empty (CPU-only build) or an EESSI-style accelerator
+// subdir relative to the arch dir (e.g. accel/nvidia/cc100); when set it is
+// included in the tarball name.
+func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, listFile *os.File) (string, error) {
 	var args []string
 	// second exclude is redundant because of the filter below
 	args = append(args, "tar", "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
 	workingDir := versionsDir(repo)
 	args = append(args, "-C", workingDir)
-	tarball := tarballPath(archSubdir, name, outdir)
+	tarball := tarballPath(archSubdir, accelSubdir, name, outdir)
 	args = append(args, "-czf", tarball)
 	filesFrom := fmt.Sprintf("--files-from=%s", listFile.Name())
 	args = append(args, filesFrom)
@@ -58,11 +61,17 @@ func ExecTar(repo, archSubdir, name, outdir string, listFile *os.File) (string, 
 
 // tarballPath constructs a filepath to the tarball that will be subsequently created.
 // returns a string containing the absolute path
-func tarballPath(archSubdir, name, outdir string) string {
-	normalizedArchDir := strings.ReplaceAll(archSubdir, "/", "-")
+// The target triplet in the name is <arch>-<accel> with slashes normalized to
+// dashes, e.g. x86_64-amd-zen5-accel-nvidia-cc100 (mirrors EESSI's tarball
+// naming in bot/build.sh); for CPU-only builds the accel part is omitted.
+func tarballPath(archSubdir, accelSubdir, name, outdir string) string {
+	target := strings.ReplaceAll(archSubdir, "/", "-")
+	if accelSubdir != "" {
+		target += "-" + strings.ReplaceAll(accelSubdir, "/", "-")
+	}
 	t := time.Now()
 	ts := t.Format("20060102150405")
-	result := fmt.Sprintf("%s/%s-%s-%s.tar.gz", outdir, name, normalizedArchDir, ts)
+	result := fmt.Sprintf("%s/%s-%s-%s.tar.gz", outdir, name, target, ts)
 	slog.Debug("resolved tarball path", "path", result)
 	return result
 }
@@ -92,7 +101,7 @@ func archDir(repo string, version string, archSubdir string) string {
 // Lockfiles are created in order to prevent race conditions whereby the
 // ingestion service tries to read a partially written tarball
 func acquireLockfile(tarballPath string) (*os.File, error) {
-	name := strings.TrimRight(tarballPath, ".tar.gz")
+	name := strings.TrimSuffix(tarballPath, ".tar.gz")
 	lf := fmt.Sprintf("%s.lock", name)
 	lockFilePath := filepath.Clean(lf)
 	slog.Debug("found or creating lockfile", "path", lockFilePath)
@@ -206,30 +215,63 @@ func newListFile(workdir string) (*os.File, error) {
 	return file, nil
 }
 
+// searchRoots returns the list of <archDir>/.. roots to scan for built
+// content: the CPU arch dir always, plus the accelerator subdir hanging off
+// it when accelSubdir is set (EESSI layout: software/linux/<arch>/accel/
+// <vendor>/<cc>/{modules,software}).
+func searchRoots(repo, version, archSubdir, accelSubdir string) []string {
+	arch := archDir(repo, version, archSubdir)
+	roots := []string{arch}
+	if accelSubdir != "" {
+		roots = append(roots, path.Join(arch, accelSubdir))
+	}
+	return roots
+}
+
 // MakeListFile collects any visible paths along the "software" and
 // "modules" subdirectories of the overlayfs. A visible path in this
 // context will equate to a software/module combination, or set of
 // combinations that exist after an easybuild command has succeeded in
 // building software into the overlay filesystem.
-func MakeListFile(repo, version, archSubdir string) (*os.File, error) {
+//
+// The scan covers the CPU arch dir and (when accelSubdir is set) the
+// accelerator subdir below it. Each "modules"/"software" subtree is only
+// scanned when present in the overlay: an accelerator build may touch only
+// the accel tree and a CPU-only build only the CPU tree, so a missing
+// subtree is skipped (as in EESSI's create_tarball.sh) rather than treated
+// as an error. Finding nothing at all is an error.
+func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, error) {
 
-	archDir := archDir(repo, version, archSubdir)
+	roots := searchRoots(repo, version, archSubdir, accelSubdir)
 
 	// file list for the tarball
 	var fileList []string
 
-	modules, err := findModules(archDir)
-	if err != nil {
-		return nil, fmt.Errorf("finding modules: %w", err)
-	}
-	fileList = append(fileList, modules...)
+	for _, root := range roots {
+		if _, err := os.Stat(path.Join(root, "modules")); err == nil {
+			modules, err := findModules(root)
+			if err != nil {
+				return nil, fmt.Errorf("finding modules under %s: %w", root, err)
+			}
+			fileList = append(fileList, modules...)
+		} else {
+			slog.Debug("no modules subtree, skipping", "dir", root)
+		}
 
-	software, err := findSoftware(archDir)
-	if err != nil {
-		return nil, fmt.Errorf("finding software: %w", err)
+		if _, err := os.Stat(path.Join(root, "software")); err == nil {
+			software, err := findSoftware(root)
+			if err != nil {
+				return nil, fmt.Errorf("finding software under %s: %w", root, err)
+			}
+			fileList = append(fileList, software...)
+		} else {
+			slog.Debug("no software subtree, skipping", "dir", root)
+		}
 	}
 
-	fileList = append(fileList, software...)
+	if len(fileList) == 0 {
+		return nil, fmt.Errorf("nothing to pack: no built modules or software found under %s", strings.Join(roots, ", "))
+	}
 
 	workdir := versionsDir(repo)
 	tmpfile, err := newListFile(workdir)

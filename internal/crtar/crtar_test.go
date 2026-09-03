@@ -268,7 +268,7 @@ func TestExecTar_CreatesTarball(t *testing.T) {
 	listFile := writeListFile(t, outdir, modFile)
 
 	name, cpu := "sami", "amd/zen4"
-	tb, err := ExecTar(repo, cpu, name, outdir, listFile)
+	tb, err := ExecTar(repo, cpu, "", name, outdir, listFile)
 	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestExecTar_FailsOnMissingFile(t *testing.T) {
 	missing := filepath.Join(versionsDir(repo), "2025.06", "nope.lua")
 	listFile := writeListFile(t, outdir, missing)
 
-	tb, err := ExecTar(repo, "amd/zen4", "sami", outdir, listFile)
+	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile)
 	if err == nil {
 		t.Fatal("expected ExecTar to fail for a missing listed file")
 	}
