@@ -5,14 +5,17 @@
 package samctr
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	isamctr "github.com/asc-ac-at/sam/internal/samctr"
+	"github.com/asc-ac-at/sam/pkg/subproc"
 )
 
 // basically, we need to create a list of fusemounts that appeared in the
@@ -145,23 +148,35 @@ func PrepareContainerPreRun(cmd *cobra.Command, args []string) error {
 
 	var apptainerCmdOpts []string
 
+	// hermetic container env: pass --cleanenv when requested via CLI or config
+	// (build jobs go through sami → exec; interactive shells stay permissive
+	// unless explicitly requested)
+	if CleanEnv || AppConfig.CleanEnv {
+		apptainerCmdOpts = append(apptainerCmdOpts, "--cleanenv")
+	}
+
 	// nvidia setup (optional)
 	// check for nvidia-smi, if present:
 	//  + setup nvidia flag for apptainer
 	//  + setup bind mount
 	var nvidiaBinds []isamctr.BindMount
-	nvidiaSmiPath, n_err := IoRunner("which", "nvidia-smi")
-	nvidiaFlag := ""
-	if n_err != nil { // setup nvidia
-		return fmt.Errorf("failed to find host nvidia: %w", n_err)
-	} else {
-		nvidiaFlag = "--nv"
-		apptainerCmdOpts = append(apptainerCmdOpts, nvidiaFlag)
-		// which returns a linebreak
-		nvSafePath := strings.TrimSuffix(nvidiaSmiPath, "\n")
-		nvBm := isamctr.NewBindMount(nvSafePath, nvSafePath, "ro")
-		nvidiaBinds = append(nvidiaBinds, *nvBm)
+
+	cfg := subproc.New([]string{"which", "nvidia-smi"})
+	cfg.Timeout = 3 * time.Second
+	var stdout, stderr bytes.Buffer
+	cfg.Stdout = &stdout
+	cfg.Stderr = &stderr
+	if err := cfg.Run(); err != nil {
+		return fmt.Errorf(`which nvidia-smi failed: %q`, err)
 	}
+	nvidiaSmiPath := strings.TrimSpace(stdout.String())
+
+	nvidiaFlag := "--nv"
+	apptainerCmdOpts = append(apptainerCmdOpts, nvidiaFlag)
+	// which returns a linebreak
+	nvSafePath := strings.TrimSuffix(nvidiaSmiPath, "\n")
+	nvBm := isamctr.NewBindMount(nvSafePath, nvSafePath, "ro")
+	nvidiaBinds = append(nvidiaBinds, *nvBm)
 
 	// Merge bind paths
 	allBinds := make([]isamctr.BindMount, 0, len(configBinds)+len(cliBinds)+len(state.BindMounts)+len(nvidiaBinds))

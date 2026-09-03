@@ -6,11 +6,14 @@ package samctr
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	isamctr "github.com/asc-ac-at/sam/internal/samctr"
+	"github.com/asc-ac-at/sam/pkg/subproc"
 	"github.com/spf13/cobra"
 )
 
@@ -85,11 +88,16 @@ Examples:
 		slog.Debug("parsed args after dash", "count", len(argsAfterDash))
 		Runtime.ArgsAfterDash = argsAfterDash
 
+		execArg := ApptainerExecArg(Runtime)
 		if ToStdout {
-			fmt.Printf("/bin/sh -c apptainer %s\n", ApptainerExecArg(Runtime))
+			fmt.Printf("/bin/sh -c apptainer %s\n", execArg)
 			return
 		} else {
-			RunSystemShell(Runtime, ApptainerExecArg)
+			cfg := subproc.New([]string{"/bin/sh", "-c", execArg})
+			cfg.Timeout = 72 * time.Hour
+			if err := cfg.Run(); err != nil {
+				log.Fatalf(`/bin/sh -c apptainer %s failed: %q`, execArg, err)
+			}
 		}
 	},
 }
