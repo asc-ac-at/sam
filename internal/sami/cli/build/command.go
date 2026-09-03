@@ -92,21 +92,22 @@ by the container tool e.g: samctr.`,
 				data.OutputDir = data.Logdir
 			}
 
+			// 3.1.1 configure subdirectories
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("publishing requires a sami config with arch-mapping: %w", err)
+			}
+			archSubdir, accelSubdir, err := resolveSubdirs(cfg, arch, accel)
+			if err != nil {
+				return err
+			}
+			data.ArchSubdir = archSubdir
+			data.AccelSubdir = accelSubdir
+
 			// when publishing, resolve the crtar subdirs now: the mapping
 			// tables live in the sami config and are needed identically for
 			// both the slurm and the local backend
 			if data.Publish {
-				cfg, err := config.Load()
-				if err != nil {
-					return fmt.Errorf("publishing requires a sami config with arch-mapping: %w", err)
-				}
-				archSubdir, accelSubdir, err := resolveSubdirs(cfg, arch, accel)
-				if err != nil {
-					return err
-				}
-				data.ArchSubdir = archSubdir
-				data.AccelSubdir = accelSubdir
-
 				if err := validatePublish(cfg); err != nil {
 					return err
 				}
@@ -131,6 +132,7 @@ by the container tool e.g: samctr.`,
 				}
 				estacks = append(estacks, es)
 			}
+			data.Easystacks = estacks
 
 			if err = renderBuildCmd(buildCmdTmpl, data, blPath.BuildCmd); err != nil {
 				return err

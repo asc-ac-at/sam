@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 
-# sami builds are hermetic: drop the builder's user namespace ($HOME/eessi)
-unset EESSI_USER_INSTALL || true
 # General setup
 export EESSI_SITE_INSTALL=1
 export EESSI_SITE_SOFTWARE_PREFIX={{ .CvmfsRepo }}
+
+# hermetic target selection: build env must not inherit the login shell's view
+unset EESSI_USER_INSTALL || true
+unset EESSI_ACCELERATOR_TARGET_OVERRIDE EESSI_ACCELERATOR_TARGET EESSI_ACCEL_SUBDIR EESSI_ACCEL_SOFTWARE_SUBDIR_OVERRIDE
 {{ if .AccelSubdir }}
 export EESSI_ACCELERATOR_TARGET_OVERRIDE={{ .AccelSubdir }}
+export EESSI_ACCELERATOR_INSTALL=1
 {{ end }}
 
 source {{ .LmodInit }}
