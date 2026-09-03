@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 # General setup
-export EESSI_PROJECT_INSTALL={{ .CvmfsRepo }}
+export EESSI_SITE_INSTALL=1
+export EESSI_SITE_SOFTWARE_PREFIX={{ .CvmfsRepo }}
 
 source {{ .LmodInit }}
 
@@ -17,7 +18,7 @@ ml load EESSI-extend
 ml load {{ .EbVersion }}
 
 echo "Building easystack: {{ . }}"
-stack_file="{{ . }}"
+stack_file="{{ .Path }}"
 if [ ! -f ${stack_file} ]; then
     printf "ERR - file not found ${stack_file}"
     exit 1
