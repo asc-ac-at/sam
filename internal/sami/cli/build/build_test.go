@@ -12,10 +12,14 @@ import (
 
 func TestNewCvmfsBuildCmdData(t *testing.T) {
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData return err %v`, err)
+	}
 
 	if data == nil {
-		t.Fatal("NewCvmfsBuildCmdData returned nil")
+		t.Fatal(`NewCvmfsBuildCmdData returned nil`)
 	}
 
 	if data.SWSVariant != opts.SWSVariant {
@@ -40,7 +44,11 @@ func TestNewCvmfsBuildCmdData(t *testing.T) {
 
 func TestCvmfsBuildCmdData_Publish(t *testing.T) {
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData return err %v`, err)
+	}
 
 	data.Publish = true
 	if !data.Publish {
@@ -57,10 +65,10 @@ func TestNewCvmfsBuildCmdData_DifferentOpts(t *testing.T) {
 	opts := optsForTest()
 	opts.SWSVariant = "2026.01"
 
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
 
-	if data.SWSVariant != "2026.01" {
-		t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, "2026.01")
+	if data.SWSVariant != "2026.01" || err != nil {
+		t.Errorf(`SWSVariant = %q, want %q %v`, data.SWSVariant, "2026.01", err)
 	}
 }
 
@@ -73,7 +81,12 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 
 	opts := optsForTest()
 	opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.AccelSubdir = "accel/nvidia/cc90"
@@ -116,7 +129,12 @@ func TestRenderBuildCmd_HermeticUserNamespace(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	data := NewCvmfsBuildCmdData(optsForTest())
+	opts := optsForTest()
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
 		t.Fatalf("renderBuildCmd failed: %v", err)
@@ -138,7 +156,12 @@ func TestRenderBuildCmd_PublishTrue(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
@@ -162,7 +185,11 @@ func TestRenderBuildCmd_PublishCPUOnly(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.AccelSubdir = ""
@@ -198,8 +225,14 @@ func TestRenderBuildCmd_PublishLogdir(t *testing.T) {
 	}
 
 	t.Run("concrete logdir in failure branch", func(t *testing.T) {
+
 		opts := optsForTest()
-		data := NewCvmfsBuildCmdData(opts)
+		data, err := NewCvmfsBuildCmdData(opts)
+
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
 		data.Publish = true
 		data.ArchSubdir = "x86_64/amd/zen4"
 
@@ -224,7 +257,13 @@ func TestRenderBuildCmd_PublishLogdir(t *testing.T) {
 	t.Run("empty basepath renders degenerate path", func(t *testing.T) {
 		opts := optsForTest()
 		opts.BuildLogBasePath = ""
-		data := NewCvmfsBuildCmdData(opts)
+
+		data, err := NewCvmfsBuildCmdData(opts)
+
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
 		data.Publish = true
 		data.ArchSubdir = "x86_64/amd/zen4"
 
@@ -247,7 +286,12 @@ func TestRenderBuildCmd_PublishFalse(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = false
 	data.OutputDir = data.Logdir // RunE defaults an empty output-dir to the per-run log dir
 
@@ -278,7 +322,11 @@ func TestRenderBuildCmd_LmodInit(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	err = renderBuildCmd(buildCmdTmpl, data, outFile)
@@ -298,11 +346,16 @@ func TestRenderBuildCmd_LmodInit(t *testing.T) {
 }
 
 func TestRenderBuildCmd_InvalidPath(t *testing.T) {
+
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 
 	// Use a path where parent doesn't exist
-	err := renderBuildCmd(buildCmdTmpl, data, "/nonexistent/dir/build_cmd.sh")
+	err = renderBuildCmd(buildCmdTmpl, data, "/nonexistent/dir/build_cmd.sh")
 	if err == nil {
 		t.Error("expected error for invalid path")
 	}
@@ -317,7 +370,11 @@ func TestRenderBuildCmd_NonZeroSWS(t *testing.T) {
 
 	opts := optsForTest()
 	opts.SWSVariant = "2026.01"
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	err = renderBuildCmd(buildCmdTmpl, data, outFile)
@@ -350,7 +407,12 @@ func TestRenderBuildCmd_LegacyNFSDrop(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = false
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.OutputDir = "/opt/adm/sam-archives"
@@ -384,7 +446,12 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.OutputDir = "/log/run/sami.xyz"
@@ -426,7 +493,13 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 func TestRenderBuildCmd_PublishRGWNoEndpoint(t *testing.T) {
 	outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
 
-	data := NewCvmfsBuildCmdData(optsForTest())
+	opts := optsForTest()
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.OutputDir = "/log/run/sami.xyz"

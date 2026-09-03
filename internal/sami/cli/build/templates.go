@@ -2,10 +2,12 @@ package build
 
 import (
 	_ "embed"
+	"fmt"
 	"os"
 	"path/filepath"
 	"text/template"
 
+	easybuild "github.com/asc-ac-at/sam/internal/sami"
 	"github.com/asc-ac-at/sam/internal/sami/cli/shared"
 	"github.com/asc-ac-at/sam/internal/sami/config"
 )
@@ -20,7 +22,7 @@ type CvmfsBuildCmdData struct {
 	RGWBucket   string
 	RGWEndpoint string
 	SWSVariant  string
-	Easystacks  []string
+	Easystacks  []*easybuild.Easystack
 	Publish     bool
 	LmodInit    string
 	CvmfsRepo   string
@@ -30,7 +32,7 @@ type CvmfsBuildCmdData struct {
 }
 
 // NewCvmfsBuildCmdData creates a structure with
-func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
+func NewCvmfsBuildCmdData(opts *shared.Options) (*CvmfsBuildCmdData, error) {
 	cmdData := &CvmfsBuildCmdData{
 		SWSVariant: opts.SWSVariant,
 		Publish:    false,
@@ -42,9 +44,17 @@ func NewCvmfsBuildCmdData(opts *shared.Options) *CvmfsBuildCmdData {
 	}
 	// user supplied target files take precedence over changed files in the repo
 	if len(opts.Files) > 0 {
-		cmdData.Easystacks = opts.Files
+		var estacks []*easybuild.Easystack
+		for _, f := range opts.Files {
+			es, err := easybuild.NewEasystack(f)
+			if err != nil {
+				return nil, fmt.Errorf(`easybuild.NewEasystack(%q) failed: %w`, f, err)
+			}
+			estacks = append(estacks, es)
+		}
+		cmdData.Easystacks = estacks
 	}
-	return cmdData
+	return cmdData, nil
 }
 
 // resolveSubdirs maps the --arch / --accel / --generic inputs to EESSI

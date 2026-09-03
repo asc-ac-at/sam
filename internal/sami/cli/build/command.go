@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	easybuild "github.com/asc-ac-at/sam/internal/sami"
 	"github.com/asc-ac-at/sam/internal/sami/cli/shared"
 	"github.com/asc-ac-at/sam/internal/sami/command/git"
 	"github.com/asc-ac-at/sam/internal/sami/config"
@@ -77,7 +78,10 @@ by the container tool e.g: samctr.`,
 			}
 
 			// 3.1 setup build cmd data
-			data := NewCvmfsBuildCmdData(opts)
+			data, err := NewCvmfsBuildCmdData(opts)
+			if err != nil {
+				return fmt.Errorf(`NewCmfsBuildCmdData(opts) failed with %w`, err)
+			}
 			publish, _ := cmd.Flags().GetBool("publish")
 			data.Publish = publish
 
@@ -112,10 +116,20 @@ by the container tool e.g: samctr.`,
 			}
 
 			// 3.2 render build cmd
+			var fpaths []string
 			if len(state.TargetFiles) > 0 {
-				data.Easystacks = git.AllTargetFilePaths(state)
+				fpaths = git.AllTargetFilePaths(state)
 			} else {
-				data.Easystacks = git.AllChangedFilePaths(state)
+				fpaths = git.AllChangedFilePaths(state)
+			}
+
+			var estacks []*easybuild.Easystack
+			for _, fpath := range fpaths {
+				es, err := easybuild.NewEasystack(fpath)
+				if err != nil {
+					return fmt.Errorf(`easybuild.NewEasystack(%q) failed with %w`, fpath, err)
+				}
+				estacks = append(estacks, es)
 			}
 
 			if err = renderBuildCmd(buildCmdTmpl, data, blPath.BuildCmd); err != nil {
