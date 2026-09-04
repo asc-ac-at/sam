@@ -19,10 +19,15 @@ export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
 [ -n "${AWS_SESSION_TOKEN}" ] && export APPTAINERENV_AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
 [ -n "${AWS_REGION}" ] && export APPTAINERENV_AWS_REGION="${AWS_REGION}"
 [ -n "${AWS_ENDPOINT_URL}" ] && export APPTAINERENV_AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL}"
-# CA bundle: the referenced path must exist inside the container -- point it
-# at a file under an existing bind (e.g. /opt/rgw/tls-ca-bundle.pem), the
-# host's /etc/pki path is not present in the SIF.
-[ -n "${AWS_CA_BUNDLE}" ] && export APPTAINERENV_AWS_CA_BUNDLE="${AWS_CA_BUNDLE}"
+# CA bundle gets translated, not passed through: the wrapper knows
+# $HOME/.config/rgw is bound to /opt/rgw in the container, so the cert
+# convention is "tls-ca-bundle.pem in the creds dir" and the container
+# always sees the /opt/rgw path, regardless of the host-side value.
+_rgw_cert="${HOME}/.config/rgw/tls-ca-bundle.pem"
+if [ -f "${_rgw_cert}" ]; then
+    export APPTAINERENV_AWS_CA_BUNDLE="/opt/rgw/tls-ca-bundle.pem"
+fi
+unset _rgw_cert
 
 {{ end }}samctr exec \
     --cleanenv \
