@@ -93,7 +93,7 @@ Examples:
 		} else {
 			cfg := newSystemShell(Runtime, execArg)
 			if err := cfg.Run(); err != nil {
-				log.Fatalf(`/bin/sh -c apptainer %s failed: %q`, execArg, err)
+				log.Fatalf(`/bin/sh -c %s failed: %q`, execArg, err)
 			}
 		}
 	},

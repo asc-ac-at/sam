@@ -122,6 +122,7 @@ func TestRenderScript_PublishForwardsRgwCreds(t *testing.T) {
 		`rgw_creds="${HOME}/.config/rgw/sam.env"`,
 		`. "${rgw_creds}"`,
 		`export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"`,
+		`[ -n "${AWS_CA_BUNDLE}" ] && export APPTAINERENV_AWS_CA_BUNDLE="${AWS_CA_BUNDLE}"`,
 		"publish requested but rgw credentials file not found",
 	} {
 		if !strings.Contains(s, want) {
