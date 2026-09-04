@@ -192,3 +192,59 @@ func TestExecTar_AccelNameOnDisk(t *testing.T) {
 		t.Errorf("tarball members %v missing the accel module file", names)
 	}
 }
+
+// TestMakeListFile_ListFileLocation: the scratch list file lives in the OS
+// temp dir, never in the tar working dir (versions/) — leftover list files
+// used to get tarred up and pushed to the stratum.
+func TestMakeListFile_ListFileLocation(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	cpuRoot := archDir(repo, "2025.06", testArchSubdir)
+	mkModuleAndSoftware(t, cpuRoot, "Go", "1.25.7")
+
+	lf, err := MakeListFile(repo, "2025.06", testArchSubdir, "")
+	if err != nil {
+		t.Fatalf("MakeListFile: %v", err)
+	}
+	if strings.Contains(lf.Name(), "versions") {
+		t.Errorf("list file %s must not live under the versions/ workdir", lf.Name())
+	}
+	if strings.Contains(filepath.Base(lf.Name()), "/") {
+		t.Errorf("list file name must be flat, got %s", lf.Name())
+	}
+}
+
+// TestMakeListFile_IgnoresStrayListFiles: any files.list.txt* that happens
+// to exist in versions/ (e.g. from a crashed earlier run) is not captured
+// as tarball payload.
+func TestMakeListFile_IgnoresStrayListFiles(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	cpuRoot := archDir(repo, "2025.06", testArchSubdir)
+	mkModuleAndSoftware(t, cpuRoot, "Go", "1.25.7")
+	if err := os.WriteFile(filepath.Join(versionsDir(repo), "files.list.txt123"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lf, err := MakeListFile(repo, "2025.06", testArchSubdir, "")
+	if err != nil {
+		t.Fatalf("MakeListFile: %v", err)
+	}
+	joined := strings.Join(readListFile(t, lf), "\n")
+	if strings.Contains(joined, "files.list.txt") {
+		t.Errorf("stray list files in versions/ must not become payload, got:\n%s", joined)
+	}
+
+	// ExecTar must clean up the list file after the run
+	outdir := t.TempDir()
+	tb, err := ExecTar(repo, testArchSubdir, "", "sami", outdir, lf)
+	if err != nil {
+		t.Fatalf("ExecTar: %v", err)
+	}
+	if _, err := os.Stat(lf.Name()); !os.IsNotExist(err) {
+		t.Errorf("ExecTar should remove the consumed list file, still present: %v", lf.Name())
+	}
+	_ = tb
+}

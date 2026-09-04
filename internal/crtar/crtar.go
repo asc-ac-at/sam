@@ -31,6 +31,9 @@ import (
 // subdir relative to the arch dir (e.g. accel/nvidia/cc100); when set it is
 // included in the tarball name.
 func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, listFile *os.File) (string, error) {
+	// the list file is single-use: consume it here and clean it up, it
+	// carries no value after the tarball exists
+	defer os.Remove(listFile.Name())
 	var args []string
 	// second exclude is redundant because of the filter below
 	args = append(args, "tar", "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
@@ -206,11 +209,14 @@ func findSoftware(searchPath string) ([]string, error) {
 	return result, nil
 }
 
-// newListFile creates a files.list.txt in workdir
-func newListFile(workdir string) (*os.File, error) {
-	file, err := os.CreateTemp(workdir, "files.list.txt")
+// newListFile creates a temporary files.list.txt in the OS temp dir.
+// Deliberately NOT in the tar working dir: a list file left next to the
+// work tree can be captured by tar (and pushed through py-auto-ingest),
+// which is how dozens of files.list.txt<N> files ended up on the stratum.
+func newListFile() (*os.File, error) {
+	file, err := os.CreateTemp("", "files.list.txt")
 	if err != nil {
-		return nil, fmt.Errorf("creating list file in %s: %w", workdir, err)
+		return nil, fmt.Errorf("creating list file: %w", err)
 	}
 	return file, nil
 }
@@ -274,7 +280,7 @@ func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, erro
 	}
 
 	workdir := versionsDir(repo)
-	tmpfile, err := newListFile(workdir)
+	tmpfile, err := newListFile()
 	if err != nil {
 		return nil, err
 	}
