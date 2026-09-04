@@ -9,10 +9,8 @@ import (
 	"log"
 	"log/slog"
 	"strings"
-	"time"
 
 	isamctr "github.com/asc-ac-at/sam/internal/samctr"
-	"github.com/asc-ac-at/sam/pkg/subproc"
 	"github.com/spf13/cobra"
 )
 
@@ -46,8 +44,7 @@ This will prepare a command to execute Apptainer shell with the desired configur
 			fmt.Printf("/bin/sh -c %s\n", shellArg)
 			return
 		} else {
-			cfg := subproc.New([]string{"/bin/sh", "-c", shellArg})
-			cfg.Timeout = 72 * time.Hour
+			cfg := newSystemShell(Runtime, shellArg)
 			if err := cfg.Run(); err != nil {
 				log.Fatalf(`/bin/sh -c %s failed, %q`, shellArg, err)
 			}
