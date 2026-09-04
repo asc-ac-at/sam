@@ -486,6 +486,9 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 	if !strings.Contains(got, "export AWS_ENDPOINT_URL=https://rgw.example.org") {
 		t.Errorf("rendered output should export the configured endpoint, got: %q", got)
 	}
+	if strings.Contains(got, "rgw_creds=$HOME/.config/rgw/sam.env") {
+		t.Errorf("creds are forwarded by the sbatch wrapper (APPTAINERENV_) since the cleanenv change; in-container creds sourcing must be gone, got: %q", got)
+	}
 }
 
 // RGWEndpoint empty: no AWS_ENDPOINT_URL export should be rendered

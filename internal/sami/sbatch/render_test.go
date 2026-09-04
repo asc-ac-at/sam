@@ -102,6 +102,49 @@ func TestRenderHeaders_UnknownPartition(t *testing.T) {
 	}
 }
 
+func TestRenderScript_PublishForwardsRgwCreds(t *testing.T) {
+	var out bytes.Buffer
+	err := RenderScript(ScriptData{
+		Headers:      "#SBATCH -p zen4_gpu",
+		BuildCmdPath: "/logdir/build_cmd.sh",
+		Publish:      true,
+	}, &out)
+	if err != nil {
+		t.Fatalf("RenderScript(Publish): %v", err)
+	}
+	s := out.String()
+
+	ci := strings.Index(s, "APPTAINERENV_AWS_ACCESS_KEY_ID")
+	if ci < 0 {
+		t.Fatalf("publish script must forward AWS creds via APPTAINERENV_ (survives --cleanenv), got:\n%s", s)
+	}
+	for _, want := range []string{
+		`rgw_creds="${HOME}/.config/rgw/sam.env"`,
+		`. "${rgw_creds}"`,
+		`export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"`,
+		"publish requested but rgw credentials file not found",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("publish script missing %q\ngot:\n%s", want, s)
+		}
+	}
+	ti := strings.Index(s, "samctr exec")
+	if ti < 0 || ci > ti {
+		t.Errorf("creds forwarding must render before the samctr exec call\ngot:\n%s", s)
+	}
+}
+
+func TestRenderScript_NoPublishNoCreds(t *testing.T) {
+	var out bytes.Buffer
+	err := RenderScript(ScriptData{Headers: "#SBATCH -p zen4_gpu", BuildCmdPath: "/logdir/build_cmd.sh"}, &out)
+	if err != nil {
+		t.Fatalf("RenderScript: %v", err)
+	}
+	if strings.Contains(out.String(), "APPTAINERENV_AWS") {
+		t.Errorf("non-publish script must not render creds forwarding, got:\n%s", out.String())
+	}
+}
+
 func TestRenderScript_ComposesHeadersThenBuildCmd(t *testing.T) {
 	f, err := config.LoadSbatchConfig(fixturePath)
 	if err != nil {

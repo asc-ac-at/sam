@@ -2,5 +2,23 @@
 
 {{ .Headers }}
 
-samctr exec \
+{{ if .Publish }}# publish: provision rgw/S3 credentials for the containerized build_cmd.sh.
+# The creds file is sourced on the compute node (NFS home is visible there)
+# and the AWS chain is re-exported with the APPTAINERENV_ prefix, which
+# apptainer forwards even under --cleanenv (inner side sees plain AWS_*).
+rgw_creds="${HOME}/.config/rgw/sam.env"
+if [ ! -f "${rgw_creds}" ]; then
+    echo "ERR - publish requested but rgw credentials file not found: ${rgw_creds}" >&2
+    exit 1
+fi
+set -a
+. "${rgw_creds}"
+set +a
+export APPTAINERENV_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+[ -n "${AWS_SESSION_TOKEN}" ] && export APPTAINERENV_AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
+[ -n "${AWS_REGION}" ] && export APPTAINERENV_AWS_REGION="${AWS_REGION}"
+[ -n "${AWS_ENDPOINT_URL}" ] && export APPTAINERENV_AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL}"
+
+{{ end }}samctr exec \
     -- /bin/sh <{{ .BuildCmdPath }}

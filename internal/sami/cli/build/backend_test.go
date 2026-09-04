@@ -46,7 +46,7 @@ func TestRunBackend_UnknownBackendErrors(t *testing.T) {
 	opts.BuildBackend = "bogus"
 	sub := &fakeSubmitter{}
 
-	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub); err == nil {
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub, false); err == nil {
 		t.Fatal("expected error for unknown backend")
 	}
 	if len(sub.scripts) != 0 {
@@ -59,7 +59,7 @@ func TestRunBackend_LocalSkipsSbatch(t *testing.T) {
 	opts.BuildBackend = string(shared.BackendLocal)
 	sub := &fakeSubmitter{}
 
-	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub); err != nil {
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub, false); err != nil {
 		t.Fatalf("local backend: %v", err)
 	}
 	if len(sub.scripts) != 0 {
@@ -78,7 +78,7 @@ func TestRunBackend_Slurm_NoConfigRendersOnly(t *testing.T) {
 	opts.Partition = "zen4_cpu"
 	sub := &fakeSubmitter{}
 
-	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub); err != nil {
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub, false); err != nil {
 		t.Fatalf("missing config must be render-only, not an error: %v", err)
 	}
 	if len(sub.scripts) != 0 {
@@ -104,7 +104,7 @@ func TestRunBackend_Slurm_SubmitsComposedScript(t *testing.T) {
 	sub := &fakeSubmitter{jobID: "4242"}
 
 	bl := testLogPaths()
-	if err := runBackend(opts, bl, newTestLogger(), sub); err != nil {
+	if err := runBackend(opts, bl, newTestLogger(), sub, false); err != nil {
 		t.Fatalf("slurm backend: %v", err)
 	}
 	if len(sub.scripts) != 1 {

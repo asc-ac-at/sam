@@ -20,14 +20,14 @@ import (
 //     standard location, warn and return render-only.
 //   - local: the rendered build_cmd.sh already stands alone; execution is
 //     left to a future BuildRunner.
-func runBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger, sub sbatch.Submitter) error {
+func runBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger, sub sbatch.Submitter, publish bool) error {
 	backend, err := shared.ParseBackend(opts.BuildBackend)
 	if err != nil {
 		return err
 	}
 	switch backend {
 	case shared.BackendSlurm:
-		return runSlurmBackend(opts, blPath, logger, sub)
+		return runSlurmBackend(opts, blPath, logger, sub, publish)
 	case shared.BackendLocal:
 		logger.Info("local build backend: rendered build_cmd.sh, execution not yet implemented",
 			"path", blPath.BuildCmd)
@@ -39,7 +39,7 @@ func runBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *sl
 // runSlurmBackend loads the sbatch config, composes the submit script and
 // submits it. When no config is found anywhere it logs a warning and leaves
 // the run at render-only — submission is skipped, not failed.
-func runSlurmBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger, sub sbatch.Submitter) error {
+func runSlurmBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger, sub sbatch.Submitter, publish bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		if errors.Is(err, config.ErrNotFound) {
@@ -59,6 +59,7 @@ func runSlurmBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logge
 	if err := sbatch.RenderScript(sbatch.ScriptData{
 		Headers:      headers.String(),
 		BuildCmdPath: blPath.BuildCmd,
+		Publish:      publish,
 	}, &script); err != nil {
 		return err
 	}

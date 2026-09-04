@@ -20,8 +20,9 @@ type File struct {
 }
 
 // RGWConfig holds the radosgw/S3 settings for the publish path. Bucket is
-// required when --rgw is set. Endpoint is optional; when empty it falls
-// back to the AWS_ENDPOINT_URL environment variable inside the container.
+// required when --publish is set. Endpoint is optional; when empty the
+// container falls back to the APPTAINERENV_AWS_ENDPOINT_URL variable
+// forwarded from the compute node's environment.
 type RGWConfig struct {
 	Bucket   string `yaml:"bucket"`
 	Endpoint string `yaml:"endpoint"`

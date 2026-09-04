@@ -140,7 +140,7 @@ by the container tool e.g: samctr.`,
 			logger.Debug(fmt.Sprintf("rendered build command to: %s", blPath.BuildCmd))
 
 			// 4+5. select build backend and hand the rendered build to it
-			return runBackend(opts, blPath, logger, sbatch.NewSbatchSubmitter())
+			return runBackend(opts, blPath, logger, sbatch.NewSbatchSubmitter(), publish)
 		},
 	}
 
