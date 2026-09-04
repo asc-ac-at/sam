@@ -77,10 +77,12 @@ func TestMakeListFile_ArchAndAccel(t *testing.T) {
 	lines := readListFile(t, lf)
 	joined := strings.Join(lines, "\n")
 	for _, want := range []string{
-		filepath.Join(cpuRoot, "modules", "all", "Go", "1.25.7.lua"),
-		filepath.Join(cpuRoot, "software", "Go", "1.25.7"),
-		filepath.Join(accelRoot, "modules", "all", "NVHPC", "25.9.lua"),
-		filepath.Join(accelRoot, "software", "NVHPC", "25.9"),
+		// entries are relative to <repo>/versions (py-auto-ingest plants the
+		// tarball under that base via cvmfs_server ingest -b versions)
+		"2025.06/software/linux/x86_64/amd/zen5/modules/all/Go/1.25.7.lua",
+		"2025.06/software/linux/x86_64/amd/zen5/software/Go/1.25.7",
+		"2025.06/software/linux/x86_64/amd/zen5/accel/nvidia/cc100/modules/all/NVHPC/25.9.lua",
+		"2025.06/software/linux/x86_64/amd/zen5/accel/nvidia/cc100/software/NVHPC/25.9",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("list file missing %q\ngot:\n%s", want, joined)
@@ -106,8 +108,8 @@ func TestMakeListFile_AccelOnly(t *testing.T) {
 	lines := readListFile(t, lf)
 	joined := strings.Join(lines, "\n")
 	for _, want := range []string{
-		filepath.Join(accelRoot, "modules", "all", "NVHPC", "25.9.lua"),
-		filepath.Join(accelRoot, "software", "NVHPC", "25.9"),
+		"2025.06/software/linux/x86_64/amd/zen5/accel/nvidia/cc100/modules/all/NVHPC/25.9.lua",
+		"2025.06/software/linux/x86_64/amd/zen5/accel/nvidia/cc100/software/NVHPC/25.9",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("list file missing %q\ngot:\n%s", want, joined)

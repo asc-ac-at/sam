@@ -278,10 +278,26 @@ func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, erro
 	if err != nil {
 		return nil, err
 	}
+	// members must be RELATIVE to workdir (the tar -C dir): py-auto-ingest
+	// plants the tarball under <repo>/versions via cvmfs_server ingest
+	// -b versions, and re-roots anything else under that base, burying the
+	// payload. Error hard on any path that escapes the working dir.
+	wdPrefix := workdir + string(os.PathSeparator)
+	for i, s := range fileList {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if !strings.HasPrefix(s, wdPrefix) {
+			tmpfile.Close()
+			return nil, fmt.Errorf("collected path %q escapes tar working dir %s", s, workdir)
+		}
+		fileList[i] = filepath.ToSlash(strings.TrimPrefix(s, wdPrefix))
+	}
+
 	// write any files we've found
 	writer := bufio.NewWriter(tmpfile)
 	for _, s := range fileList {
-		s = strings.TrimSpace(s)
 		if s == "" {
 			continue
 		}
