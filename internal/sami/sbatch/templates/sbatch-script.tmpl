@@ -21,4 +21,5 @@ export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
 [ -n "${AWS_ENDPOINT_URL}" ] && export APPTAINERENV_AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL}"
 
 {{ end }}samctr exec \
+    --cleanenv \
     -- /bin/sh <{{ .BuildCmdPath }}

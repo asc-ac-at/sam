@@ -172,7 +172,7 @@ func TestRenderScript_ComposesHeadersThenBuildCmd(t *testing.T) {
 		t.Errorf("first line = %q, want shebang", lines[0])
 	}
 	hi := strings.Index(s, "#SBATCH -p zen4_gpu")
-	tail := "samctr exec \\\n    -- /bin/sh <" + buildCmdPath
+	tail := "samctr exec \\\n    --cleanenv \\\n    -- /bin/sh <" + buildCmdPath
 	ti := strings.Index(s, tail)
 	if hi < 0 {
 		t.Error("headers missing from composed script")

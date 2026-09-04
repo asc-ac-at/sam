@@ -118,7 +118,7 @@ func TestRunBackend_Slurm_SubmitsComposedScript(t *testing.T) {
 		// literal lines are the contract fixed by the header refactor.
 		"#SBATCH --job-name=sami",
 		"#SBATCH --output=/tmp/x/slurm-%j.out",
-		"samctr exec \\\n    -- /bin/sh <" + bl.BuildCmd,
+		"samctr exec \\\n    --cleanenv \\\n    -- /bin/sh <" + bl.BuildCmd,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("submitted script missing %q\n got: %q", want, s)
