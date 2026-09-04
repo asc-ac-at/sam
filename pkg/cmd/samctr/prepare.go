@@ -194,12 +194,22 @@ func PrepareContainerPreRun(cmd *cobra.Command, args []string) error {
 		ApptainerCmdOpts: append([]string{}, apptainerCmdOpts...),
 	}
 
-	// With the legacy --nv path (use nvidia-container-cli = no), apptainer
-	// prefixes LD_LIBRARY_PATH with the *host* driver library directories
-	// (e.g. /lib:/lib64). Inside the container these resolve to the image's
-	// native libs, whose glibc may be older than what EESSI compat-layer
-	// binaries require (LD_LIBRARY_PATH is searched before RUNPATH). Override
-	// so only the injected GPU libs dir precedes RUNPATH resolution.
+	// Legacy --nv path (use nvidia-container-cli = no): apptainer's
+	// action-script helper set_default_ld_library_path() prepends the
+	// container's own ldconfig dirs (/lib:/lib64) whenever LD_LIBRARY_PATH
+	// equals the default "/.singularity.d/libs". Those resolve to the
+	// image's native glibc, which may be older than what EESSI compat-layer
+	// binaries require (LD_LIBRARY_PATH is searched before RUNPATH) --
+	// symptom: lua5.1: /lib64/libm.so.6: version `GLIBC_2.38' not found.
+	//
+	// Setting the env-provided value to anything NOT exactly the default
+	// suppresses that prepend; apptainer then appends :/.singularity.d/libs
+	// itself (process_linux.go injectEnvHandler), so the *doubled*
+	// "/.singularity.d/libs:/.singularity.d/libs" is expected and harmless.
+	// Do NOT "fix" the doubling: an empty value instead suppresses the
+	// libs-dir append entirely, and the exact default brings back the
+	// /lib:/lib64 prepend. Only the injected GPU libs dir may precede
+	// RUNPATH resolution.
 	if nvidiaFlag != "" {
 		runtime.Environ = append(runtime.Environ,
 			"APPTAINERENV_LD_LIBRARY_PATH=/.singularity.d/libs")
