@@ -21,13 +21,6 @@ ml load "EESSI/{{ .SWSVariant }}"
 ml load EESSI-extend
 ml load {{ .EbVersion }}
 
-# workaround to stop modules seeing EESSI
-module unuse $(echo "$MODULEPATH" | tr ':' '\n' | grep -E 'eessi\.io/.*accel')
-if module show CUDA/12.6.0 >/dev/null 2>&1; then
-    echo "WARNING: EESSI CUDA still visible on MODULEPATH"
-fi
-
-
 echo "Building easystack: {{ .Path }}"
 stack_file="{{ .Path }}"
 if [ ! -f ${stack_file} ]; then
@@ -38,7 +31,7 @@ fi
 eb -r --easystack ${stack_file}
 if [[ "$?" -ne 0 ]]; then
     printf "ERR - easybuild failed for ${stack_file}"
-	exit 1
+    exit 1
 fi
 {{end}}
 
