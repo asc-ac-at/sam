@@ -42,10 +42,9 @@ func SetupGit(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog
 }
 
 // initializeRepo will perform a git clone on the opts.GitRepo at the
-// GitRepoPath in the build log directory tree.
-// returns nil on success
+// GitRepoPath in the build log directory tree. returns nil on success
 func initializeRepo(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger *slog.Logger) error {
-	gitClone := NewGitCmd("clone").Arg(opts.GitRepo, blPath.GitRepoPath).ToArgv()
+	gitClone := NewGitCmd("clone").Arg("--depth=1", "--", opts.GitRepo, blPath.GitRepoPath).ToArgv()
 
 	cfg := command.NewCmdConfig(gitClone)
 
