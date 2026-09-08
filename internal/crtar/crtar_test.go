@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -217,6 +218,111 @@ func writeListFile(t *testing.T, outdir string, entries ...string) *os.File {
 		t.Fatal(err)
 	}
 	return lf
+}
+
+// readTarHeaders returns the headers of all members of a .tar.gz archive.
+func readTarHeaders(t *testing.T, archivePath string) []*tar.Header {
+	t.Helper()
+	f, err := os.Open(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	var hdrs []*tar.Header
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		hdrs = append(hdrs, hdr)
+	}
+	return hdrs
+}
+
+// writeModuleFile creates a single fake module file under the given repo's
+// overlay tree and returns its path.
+func writeModuleFile(t *testing.T, repo string) string {
+	t.Helper()
+	modFile := filepath.Join(
+		versionsDir(repo), "2025.06", "software", "linux", "x86_64",
+		"amd", "zen4", "modules", "all", "Go", "1.25.7.lua")
+	if err := os.MkdirAll(filepath.Dir(modFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modFile, []byte("module load Go"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return modFile
+}
+
+// TestExecTar_OwnerGroup asserts the post-hoc ownership path: packing with
+// owner="90116" and group="200300" must stamp every tarball member with the
+// forced numeric uid/gid. The cvmfs ingestion service reads these headers
+// verbatim, so this is the contract that produces a gaussian-owned tree.
+func TestExecTar_OwnerGroup(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	modFile := writeModuleFile(t, repo)
+
+	outdir := t.TempDir()
+	listFile := writeListFile(t, outdir, modFile)
+
+	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile, "90116", "200300")
+	if err != nil {
+		t.Fatalf("ExecTar: %v", err)
+	}
+
+	hdrs := readTarHeaders(t, tb)
+	if len(hdrs) == 0 {
+		t.Fatal("tarball is empty")
+	}
+	for _, hdr := range hdrs {
+		if hdr.Uid != 90116 || hdr.Gid != 200300 {
+			t.Errorf("member %q: got uid:gid %d:%d, want 90116:200300",
+				hdr.Name, hdr.Uid, hdr.Gid)
+		}
+	}
+}
+
+// TestExecTar_OwnerOnly asserts that forcing only the owner stamps the uid
+// while the gid is still taken from the file on disk.
+func TestExecTar_OwnerOnly(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	modFile := writeModuleFile(t, repo)
+	info, err := os.Stat(modFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantGid := int(info.Sys().(*syscall.Stat_t).Gid)
+
+	outdir := t.TempDir()
+	listFile := writeListFile(t, outdir, modFile)
+
+	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile, "90116", "")
+	if err != nil {
+		t.Fatalf("ExecTar: %v", err)
+	}
+
+	for _, hdr := range readTarHeaders(t, tb) {
+		if hdr.Uid != 90116 {
+			t.Errorf("member %q: got uid %d, want 90116", hdr.Name, hdr.Uid)
+		}
+		if hdr.Gid != wantGid {
+			t.Errorf("member %q: got gid %d, want on-disk gid %d", hdr.Name, hdr.Gid, wantGid)
+		}
+	}
 }
 
 // readTarNames lists the member names of a .tar.gz archive.

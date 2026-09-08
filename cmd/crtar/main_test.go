@@ -101,3 +101,31 @@ func TestPrintContract(t *testing.T) {
 		t.Errorf("contract line = %q", buf.String())
 	}
 }
+
+// TestParseFlags_Ownership asserts the post-hoc ownership flags land on the
+// config exactly as given; crtar forwards them to ExecTar, which maps them to
+// tar's --owner/--group (with --numeric-owner implied).
+func TestParseFlags_Ownership(t *testing.T) {
+	c, err := parseFlags([]string{"--owner", "90116", "--group", "200300"}, discard)
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+	if c.owner != "90116" {
+		t.Errorf("owner = %q, want %q", c.owner, "90116")
+	}
+	if c.group != "200300" {
+		t.Errorf("group = %q, want %q", c.group, "200300")
+	}
+}
+
+// TestParseFlags_OwnershipDefaults asserts ownership flags default to empty,
+// i.e. tarballs keep the on-disk owners unless explicitly overridden.
+func TestParseFlags_OwnershipDefaults(t *testing.T) {
+	c, err := parseFlags(nil, discard)
+	if err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+	if c.owner != "" || c.group != "" {
+		t.Errorf("expected empty owner/group, got %q/%q", c.owner, c.group)
+	}
+}

@@ -2,6 +2,7 @@ package build
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -397,6 +398,92 @@ func optsForTest() *shared.Options {
 	}
 }
 
+// assertBashSyntax runs `bash -n` on the rendered script. Mixing Go
+// text/template guards with shell strings is brittle (an unbalanced quote in
+// a guarded append breaks the whole script at runtime), so syntax-check the
+// rendered product, not just the template.
+func assertBashSyntax(t *testing.T, path string) {
+	t.Helper()
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available")
+	}
+	if out, err := exec.Command(bash, "-n", path).CombinedOutput(); err != nil {
+		t.Fatalf("rendered script failed bash -n: %v\n%s", err, out)
+	}
+}
+
+// renderToDisk renders the build command template with data and returns the
+// rendered content plus the path it was written to (for syntax checks).
+func renderToDisk(t *testing.T, data *CvmfsBuildCmdData) (string, string) {
+	t.Helper()
+	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	outFile := filepath.Join(tmpDir, "build_cmd.sh")
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	return string(content), outFile
+}
+
+// TestRenderBuildCmd_OwnerGroup pins the post-hoc ownership passthrough:
+// sami's --owner/--group must surface on the crtar invocation in the rendered
+// build script (crtar forwards them to tar's --owner/--group).
+func TestRenderBuildCmd_OwnerGroup(t *testing.T) {
+	opts := optsForTest()
+	opts.Owner = "90116"
+	opts.Group = "200300"
+
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.AccelSubdir = "accel/nvidia/cc90"
+
+	got, outFile := renderToDisk(t, data)
+	if !strings.Contains(got, "--owner=90116") {
+		t.Errorf("rendered output should contain --owner=90116, got: %q", got)
+	}
+	if !strings.Contains(got, "--group=200300") {
+		t.Errorf("rendered output should contain --group=200300, got: %q", got)
+	}
+	// both guarded appends exercised (accel + owner + group): full syntax check
+	assertBashSyntax(t, outFile)
+}
+
+// TestRenderBuildCmd_NoOwnerGroup asserts crtar receives no ownership flags
+// when sami's --owner/--group are unset; the tarball then keeps the on-disk
+// owners.
+func TestRenderBuildCmd_NoOwnerGroup(t *testing.T) {
+	opts := optsForTest()
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.AccelSubdir = "accel/nvidia/cc90"
+
+	got, outFile := renderToDisk(t, data)
+	if strings.Contains(got, "--owner=") {
+		t.Errorf("rendered output should not contain --owner without option, got: %q", got)
+	}
+	if strings.Contains(got, "--group=") {
+		t.Errorf("rendered output should not contain --group without option, got: %q", got)
+	}
+	assertBashSyntax(t, outFile)
+}
+
 // TestRenderBuildCmd_LegacyNFSDrop pins the legacy transport: no --publish,
 // tarball dropped straight into the NFS-shared archives dir and left there.
 func TestRenderBuildCmd_LegacyNFSDrop(t *testing.T) {
@@ -489,6 +576,7 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 	if strings.Contains(got, "rgw_creds=$HOME/.config/rgw/sam.env") {
 		t.Errorf("creds are forwarded by the sbatch wrapper (APPTAINERENV_) since the cleanenv change; in-container creds sourcing must be gone, got: %q", got)
 	}
+	assertBashSyntax(t, outFile)
 }
 
 // RGWEndpoint empty: no AWS_ENDPOINT_URL export should be rendered

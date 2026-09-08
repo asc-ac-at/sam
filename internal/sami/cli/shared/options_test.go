@@ -32,6 +32,12 @@ func TestNewOptions_Defaults(t *testing.T) {
 	if opts.Verbose {
 		t.Error("expected Verbose false")
 	}
+	if opts.Owner != "" {
+		t.Errorf("expected empty Owner, got %q", opts.Owner)
+	}
+	if opts.Group != "" {
+		t.Errorf("expected empty Group, got %q", opts.Group)
+	}
 }
 
 func TestNewOptions_ReturnsNonNil(t *testing.T) {
@@ -62,6 +68,8 @@ func TestOptions_AllFields(t *testing.T) {
 	opts.Name = "my-build"
 	opts.BuildLogBasePath = "/tmp/logs"
 	opts.Verbose = true
+	opts.Owner = "90116"
+	opts.Group = "200300"
 
 	tests := []struct {
 		name string
@@ -76,6 +84,8 @@ func TestOptions_AllFields(t *testing.T) {
 		{"Name", opts.Name, "my-build"},
 		{"BuildLogBasePath", opts.BuildLogBasePath, "/tmp/logs"},
 		{"Verbose", opts.Verbose, true},
+		{"Owner", opts.Owner, "90116"},
+		{"Group", opts.Group, "200300"},
 	}
 
 	for _, tt := range tests {
