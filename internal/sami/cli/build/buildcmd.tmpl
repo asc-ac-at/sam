@@ -7,17 +7,17 @@ export EESSI_SITE_SOFTWARE_PREFIX={{ .CvmfsRepo }}
 # hermetic target selection: build env must not inherit the login shell's view
 unset EESSI_USER_INSTALL || true
 unset EESSI_ACCELERATOR_TARGET_OVERRIDE EESSI_ACCELERATOR_TARGET EESSI_ACCEL_SUBDIR EESSI_ACCEL_SOFTWARE_SUBDIR_OVERRIDE
-{{ if .AccelSubdir }}
+{{- if .AccelSubdir }}
 export EESSI_ACCELERATOR_TARGET_OVERRIDE={{ .AccelSubdir }}
 export EESSI_ACCELERATOR_INSTALL=1
-{{ end }}
+{{- end }}
 
 source {{ .LmodInit }}
 
 ml --force purge
 ml load "EESSI/{{ .SWSVariant }}"
 
-{{ range .Easystacks }}
+{{- range .Easystacks }}
 ml load EESSI-extend
 ml load {{ .EbVersion }}
 
@@ -33,37 +33,35 @@ if [[ "$?" -ne 0 ]]; then
     printf "ERR - easybuild failed for ${stack_file}"
     exit 1
 fi
-{{end}}
-
+{{- end }}
 
 ARGS="-EESSI-version {{ .SWSVariant }} -name {{ .Name }} --arch-subdir {{ .ArchSubdir }} --outputDir {{ .OutputDir }}"
-{{if .AccelSubdir }}
+{{- if .AccelSubdir }}
 ARGS="${ARGS} --accel-subdir {{ .AccelSubdir }}"
-{{ end }}
-{{if .Owner }}
+{{- end }}
+{{- if .Owner }}
 ARGS="${ARGS} --owner={{ .Owner }}"
-{{ end }}
-{{if .Group }}
+{{- end }}
+{{- if .Group }}
 ARGS="${ARGS} --group={{ .Group }}"
-{{ end }}
+{{- end }}
 
 if [[ "$?" -eq 0 ]]; then
-{{if .Publish}}
+{{- if .Publish}}
     # creds provisioned by the sbatch wrapper via APPTAINERENV_ forwarding
     # (no creds file bind-mounted into the container)
     tb="$(crtar ${ARGS} | grep '^TARBALL=' | cut -d= -f2-)"
     bn="$(basename "$tb")"
     (cd "$(dirname "$tb")" && sha256sum "$bn" > "$bn.sha256")
-{{ if .RGWEndpoint }}
+{{- if .RGWEndpoint }}
     export AWS_ENDPOINT_URL={{ .RGWEndpoint }}
-{{ end }}
+{{- end }}
     rgw object put {{ .RGWBucket }} "$bn" "$tb"
     # sentinel last: pullers only ingest pairs (default-deny)
     rgw object put {{ .RGWBucket }} "$bn.sha256" "$(dirname "$tb")/$bn.sha256"
-{{else}}
+{{- else }}
     crtar ${ARGS}
-{{end}}
+{{- end }}
 else
     cp -a /tmp/ {{ .Logdir }}/ctr-tmp
 fi
-
