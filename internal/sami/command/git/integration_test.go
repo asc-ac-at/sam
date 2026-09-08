@@ -166,6 +166,42 @@ func TestGetCommitShaFromMergeReqId_Integration(t *testing.T) {
 	}
 }
 
+// TestGetChangedFiles_ShallowCloneFetchHead is a regression test for the
+// empty-easystack failure: a depth-1 fetch grafts away the diffed commit's
+// parent, git diff-tree sees a root commit and reports no changed files, and
+// sami rendered a build_cmd.sh without any eb commands. fetchHead must fetch
+// deep enough for git diff-tree to still compute the last commit's diff in a
+// shallow clone.
+func TestGetChangedFiles_ShallowCloneFetchHead(t *testing.T) {
+	originDir, headSha, branch := newTestRepo(t)
+
+	// sami clones depth=1; use file:// so the depth restriction actually applies
+	parent := t.TempDir()
+	runGit(t, parent, "clone", "--depth=1", "file://"+originDir, "work")
+	workDir := filepath.Join(parent, "work")
+
+	if out := runGit(t, workDir, "rev-parse", "--is-shallow-repository"); out != "true" {
+		t.Fatalf("test premise broken: clone is not shallow")
+	}
+
+	state := newTestState(workDir, "")
+	var err error
+	state, err = getCommitShaFromBranchName(branch, state, newDiscardLogger())
+	if err != nil {
+		t.Fatalf("getCommitShaFromBranchName(%q): %v", branch, err)
+	}
+	runGit(t, workDir, "checkout", headSha)
+
+	state, err = GetChangedFiles(state, newDiscardLogger())
+	if err != nil {
+		t.Fatalf("GetChangedFiles: %v", err)
+	}
+	want := "easystacks/2025.06/asc_eb_5.3.0-test.yaml"
+	if len(state.ChangedFiles) != 1 || state.ChangedFiles[0] != want {
+		t.Errorf("ChangedFiles = %v, want [%s]", state.ChangedFiles, want)
+	}
+}
+
 // TestGetCommitShaFromMergeReqId_Unknown asserts a nonexistent MR id fails
 // fetch-side (GitLab answers with "couldn't find remote ref"), carrying
 // git's stderr in the error.

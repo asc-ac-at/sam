@@ -17,7 +17,11 @@ import (
 // fetching arbitrary shas, and ensures the object is present in what may be
 // a --depth=1, default-branch-only clone.
 func fetchHead(ref string, state *RepoState, logger *slog.Logger) (string, error) {
-	fetch := NewGitCmd("fetch").Arg("--depth=1", "origin", ref)
+	// depth must cover the commit AND its parent: downstream uses
+	// 'git diff-tree <sha>' to compute changed files, and a depth-1 fetch
+	// leaves the parent grafted away, which makes diff-tree see a root
+	// commit and return an empty file list
+	fetch := NewGitCmd("fetch").Arg("--depth=2", "origin", ref)
 	fetch.Dir(state.Paths.RepoPath())
 
 	cfg := command.NewCmdConfig(fetch.ToArgv())
