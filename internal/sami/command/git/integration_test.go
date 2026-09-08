@@ -47,6 +47,11 @@ func newTestRepo(t *testing.T) (dir string, headSha string, branch string) {
 	runGit(t, dir, "config", "user.email", "sami-test@example.com")
 	runGit(t, dir, "config", "user.name", "Sami Test")
 
+	// the repository stands in as its own origin: the caller-facing git flow
+	// (fetchHead) always fetches from origin, which a bare test worktree would
+	// not have
+	runGit(t, dir, "remote", "add", "origin", dir)
+
 	if err := os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -138,5 +143,41 @@ func TestGetCommitShaFromBranchName_Integration(t *testing.T) {
 	}
 	if got.CommitSha != headSha {
 		t.Errorf("CommitSha = %q, want %q", got.CommitSha, headSha)
+	}
+}
+
+// TestGetCommitShaFromMergeReqId_Integration exercises the GitLab MR flow: a
+// ref under refs/merge-requests/<id>/head is fetched into the clone and
+// rev-parse FETCH_HEAD resolves it to the head commit's sha.
+func TestGetCommitShaFromMergeReqId_Integration(t *testing.T) {
+	dir, headSha, _ := newTestRepo(t)
+
+	// GitLab publishes MR heads as refs/merge-requests/<id>/head; the sha must
+	// not be reachable from any fetched branch for the test to mean anything
+	runGit(t, dir, "update-ref", "refs/merge-requests/52/head", headSha)
+
+	state := newTestState(dir, "")
+	got, err := getCommitShaFromMergeReqId(52, state, newDiscardLogger())
+	if err != nil {
+		t.Fatalf("getCommitShaFromMergeReqId(52): %v", err)
+	}
+	if got.CommitSha != headSha {
+		t.Errorf("CommitSha = %q, want %q", got.CommitSha, headSha)
+	}
+}
+
+// TestGetCommitShaFromMergeReqId_Unknown asserts a nonexistent MR id fails
+// fetch-side (GitLab answers with "couldn't find remote ref"), carrying
+// git's stderr in the error.
+func TestGetCommitShaFromMergeReqId_Unknown(t *testing.T) {
+	dir, _, _ := newTestRepo(t)
+	state := newTestState(dir, "")
+
+	_, err := getCommitShaFromMergeReqId(999999, state, newDiscardLogger())
+	if err == nil {
+		t.Fatal("expected error for unknown MR id, got nil")
+	}
+	if !strings.Contains(err.Error(), "git fetch") {
+		t.Errorf("error should name the fetch step, got: %v", err)
 	}
 }
