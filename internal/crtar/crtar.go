@@ -30,7 +30,7 @@ import (
 // accelSubdir may be empty (CPU-only build) or an EESSI-style accelerator
 // subdir relative to the arch dir (e.g. accel/nvidia/cc100); when set it is
 // included in the tarball name.
-func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, listFile *os.File) (string, error) {
+func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, listFile *os.File, owner, group string) (string, error) {
 	// the list file is single-use: consume it here and clean it up, it
 	// carries no value after the tarball exists
 	defer os.Remove(listFile.Name())
@@ -43,6 +43,19 @@ func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, listFile *os.Fi
 	args = append(args, "-czf", tarball)
 	filesFrom := fmt.Sprintf("--files-from=%s", listFile.Name())
 	args = append(args, filesFrom)
+
+	// optionally change ownership of files being packed into tarball
+	if (owner != "") || (group != "") {
+		args = append(args, "--numeric-owner")
+	}
+	if owner != "" {
+		u := fmt.Sprintf("--owner=%s", owner)
+		args = append(args, u)
+	}
+	if group != "" {
+		g := fmt.Sprintf("--group=%s", group)
+		args = append(args, g)
+	}
 
 	lockFile, lferr := acquireLockfile(tarball)
 	if lferr != nil {

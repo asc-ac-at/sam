@@ -62,7 +62,7 @@ func TestExecTar_IncludesFullPackageTree(t *testing.T) {
 	outdir := t.TempDir()
 	listFile := writeListFile(t, outdir, pkgDir, modFile, link)
 
-	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile)
+	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile, "", "")
 	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
 	}

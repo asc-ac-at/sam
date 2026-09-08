@@ -39,6 +39,8 @@ type Options struct {
 	BuildLogBasePath string   `flag:"log-basepath" default:"/opt/adm/asc-software-stack"`
 	Verbose          bool     `flag:"verbose" default:"false"`
 	Files            []string `flag:"files"`
+	Owner            string   `flag:"owner"`
+	Group            string   `flag:"group"`
 }
 
 func NewOptions() *Options {
@@ -62,5 +64,7 @@ func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
 	cmd.PersistentFlags().StringVar(&opts.BuildLogBasePath, "log-basepath", opts.BuildLogBasePath, "Sets the base of the build log directory tree")
 	cmd.PersistentFlags().BoolVar(&opts.Verbose, "verbose", opts.Verbose, "Enable verbose logging")
 	cmd.PersistentFlags().StringArrayVarP(&opts.Files, "files", "f", opts.Files, "Easystack files to pass to easybuild. Overrides any changed files in repo.")
+	cmd.PersistentFlags().StringVar(&opts.Owner, "owner", opts.Owner, "Force NAME as owner for added files. Absent uid, lookup on host. See man tar.")
+	cmd.PersistentFlags().StringVar(&opts.Group, "group", opts.Group, "Force NAME as group for added files. Absent gid, lookup on host. See man tar.")
 	return opts
 }

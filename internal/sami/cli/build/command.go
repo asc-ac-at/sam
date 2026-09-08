@@ -60,6 +60,22 @@ by the container tool e.g: samctr.`,
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 
+			// 0. possible coroutine implementation
+			//    if by this point we can determine:
+			//    user specified "--files"  OR git repo's "changed files",
+			//    we could possible dispatch most of the following in the context of a coroutine.
+			//    The result of that would be that we would not need to build each easystack file
+			//    sequentially.
+			//    + each easystack file gets it's own:
+			//       - logdir
+			//       - build_cmd.sh
+			//       - slurm job
+			//    Cost:
+			//    + we need to determine if we rely on remote changes from git, if so, then we need
+			//    to do a version of `git.GetChangedFiles(state, logger)` remotely
+			//    The other (distinct) use case, is when we have multiple "accel" or
+			//    "arch" values.
+
 			// 1. setup logging
 			blPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
 			if err != nil {

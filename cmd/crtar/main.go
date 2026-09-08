@@ -35,6 +35,8 @@ type config struct {
 	repo         string
 	version      bool
 	verbose      bool
+	owner        string
+	group        string
 }
 
 // parseFlags parses crtar's command line. The deprecated -cpuArchSubdir
@@ -54,6 +56,8 @@ func parseFlags(args []string, out io.Writer) (*config, error) {
 	fs.StringVar(&c.repo, "repo", defaultRepo, "CVMFS repository for which the software was built")
 	fs.BoolVar(&c.version, "version", false, "print version info")
 	fs.BoolVar(&c.verbose, "verbose", false, "enable debug logging")
+	fs.StringVar(&c.owner, "owner", "", "Force NAME as owner for added files. Absent uid, lookup on host. See man tar.")
+	fs.StringVar(&c.group, "group", "", "Force NAME as group for added files. Absent gid, lookup on host. See man tar.")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -95,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	tarball, err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.accelSubdir, cfg.name, cfg.outputDir, listFile)
+	tarball, err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.accelSubdir, cfg.name, cfg.outputDir, listFile, cfg.owner, cfg.group)
 	if err != nil {
 		slog.Error("execTar failed", "error", err)
 		os.Exit(1)

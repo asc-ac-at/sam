@@ -29,6 +29,8 @@ type CvmfsBuildCmdData struct {
 	Template    string
 	Name        string
 	Logdir      string
+	Owner       string
+	Group       string
 }
 
 // NewCvmfsBuildCmdData creates a structure with
@@ -41,6 +43,8 @@ func NewCvmfsBuildCmdData(opts *shared.Options) (*CvmfsBuildCmdData, error) {
 		Template:   buildCmdTmpl,
 		Name:       opts.Name,
 		Logdir:     opts.BuildLogBasePath,
+		Owner:      opts.Owner,
+		Group:      opts.Group,
 	}
 	// user supplied target files take precedence over changed files in the repo
 	if len(opts.Files) > 0 {

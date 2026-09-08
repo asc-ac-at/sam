@@ -172,7 +172,7 @@ func TestExecTar_AccelNameOnDisk(t *testing.T) {
 		t.Fatalf("MakeListFile: %v", err)
 	}
 
-	tb, err := ExecTar(repo, testArchSubdir, testAccelSubdir, "sami", outdir, lf)
+	tb, err := ExecTar(repo, testArchSubdir, testAccelSubdir, "sami", outdir, lf, "", "")
 	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestMakeListFile_IgnoresStrayListFiles(t *testing.T) {
 
 	// ExecTar must clean up the list file after the run
 	outdir := t.TempDir()
-	tb, err := ExecTar(repo, testArchSubdir, "", "sami", outdir, lf)
+	tb, err := ExecTar(repo, testArchSubdir, "", "sami", outdir, lf, "", "")
 	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
 	}

@@ -10,6 +10,19 @@ rgw:
   bucket: sam-archives
   # endpoint: https://rgw.example.org  # optional; else AWS_ENDPOINT_URL env
 
+sbatch-partition-mapping:
+  arch:
+    zen4:
+      - zen4_cpu
+      - zen4_gpu
+    zen5:
+      - zen5_gpu
+  accel:
+    cc90:
+      - zen4_gpu
+    cc100:
+      - zen5_gpu
+
 sbatch-config:
   shared:
     header: "#sami --vanilla"

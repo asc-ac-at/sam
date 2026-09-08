@@ -35,11 +35,23 @@ if [[ "$?" -ne 0 ]]; then
 fi
 {{end}}
 
+
+ARGS="-EESSI-version {{ .SWSVariant }} -name {{ .Name }} --arch-subdir {{ .ArchSubdir }} --outputDir {{ .OutputDir }}"
+{{if .AccelSubdir }}
+ARGS="${ARGS} --accel-subdir {{ .AccelSubdir }}
+{{ end }}
+{{if .Owner }}
+ARGS="${ARGS} --owner={{ .Owner }}"
+{{ end }}
+{{if .Group }}
+ARGS="${ARGS} --group={{ .Group }}"
+{{ end }}
+
 if [[ "$?" -eq 0 ]]; then
 {{if .Publish}}
     # creds provisioned by the sbatch wrapper via APPTAINERENV_ forwarding
     # (no creds file bind-mounted into the container)
-    tb="$(crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }} | grep '^TARBALL=' | cut -d= -f2-)"
+    tb="$(crtar ${ARGS} | grep '^TARBALL=' | cut -d= -f2-)"
     bn="$(basename "$tb")"
     (cd "$(dirname "$tb")" && sha256sum "$bn" > "$bn.sha256")
 {{- if .RGWEndpoint }}
@@ -48,7 +60,7 @@ if [[ "$?" -eq 0 ]]; then
     # sentinel last: pullers only ingest pairs (default-deny)
     rgw object put {{ .RGWBucket }} "$bn.sha256" "$(dirname "$tb")/$bn.sha256"
 {{else}}
-    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }}
+    crtar ${ARGS}
 {{end}}
 else
     cp -a /tmp/ {{ .Logdir }}/ctr-tmp
