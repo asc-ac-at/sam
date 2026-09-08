@@ -38,7 +38,7 @@ fi
 
 ARGS="-EESSI-version {{ .SWSVariant }} -name {{ .Name }} --arch-subdir {{ .ArchSubdir }} --outputDir {{ .OutputDir }}"
 {{if .AccelSubdir }}
-ARGS="${ARGS} --accel-subdir {{ .AccelSubdir }}
+ARGS="${ARGS} --accel-subdir {{ .AccelSubdir }}"
 {{ end }}
 {{if .Owner }}
 ARGS="${ARGS} --owner={{ .Owner }}"
@@ -54,9 +54,10 @@ if [[ "$?" -eq 0 ]]; then
     tb="$(crtar ${ARGS} | grep '^TARBALL=' | cut -d= -f2-)"
     bn="$(basename "$tb")"
     (cd "$(dirname "$tb")" && sha256sum "$bn" > "$bn.sha256")
-{{- if .RGWEndpoint }}
+{{ if .RGWEndpoint }}
     export AWS_ENDPOINT_URL={{ .RGWEndpoint }}
-{{ end }}    rgw object put {{ .RGWBucket }} "$bn" "$tb"
+{{ end }}
+    rgw object put {{ .RGWBucket }} "$bn" "$tb"
     # sentinel last: pullers only ingest pairs (default-deny)
     rgw object put {{ .RGWBucket }} "$bn.sha256" "$(dirname "$tb")/$bn.sha256"
 {{else}}
