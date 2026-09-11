@@ -452,3 +452,48 @@ func TestAcquireLockfileAlreadyPresent(t *testing.T) {
 		t.Errorf("error should mention the lockfile, got: %v", err)
 	}
 }
+
+func TestWithAncestors_EmitsFullChain(t *testing.T) {
+	workdir := "/tmp/software.asc.ac.at/overlay-upper/versions"
+	in := []string{
+		workdir + "/2023.06/software/linux/x86_64/amd/zen4/software/Gaussian/16.C.01-AVX2",
+	}
+	got := withAncestors(workdir, in)
+	want := []string{
+		workdir + "/2023.06",
+		workdir + "/2023.06/software",
+		workdir + "/2023.06/software/linux",
+		workdir + "/2023.06/software/linux/x86_64",
+		workdir + "/2023.06/software/linux/x86_64/amd",
+		workdir + "/2023.06/software/linux/x86_64/amd/zen4",
+		workdir + "/2023.06/software/linux/x86_64/amd/zen4/software",
+		workdir + "/2023.06/software/linux/x86_64/amd/zen4/software/Gaussian",
+		workdir + "/2023.06/software/linux/x86_64/amd/zen4/software/Gaussian/16.C.01-AVX2",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("length mismatch: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("idx %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestWithAncestors_DedupsSharedChain(t *testing.T) {
+	workdir := "/tmp/software.asc.ac.at/overlay-upper/versions"
+	in := []string{
+		workdir + "/2025.06/software/linux/x86_64/amd/zen4/software/Stata/19",
+		workdir + "/2025.06/software/linux/x86_64/amd/zen4/software/Stata/19/bin",
+	}
+	got := withAncestors(workdir, in)
+	counts := map[string]int{}
+	for _, p := range got {
+		counts[p]++
+	}
+	for p, n := range counts {
+		if n != 1 {
+			t.Fatalf("duplicate ancestor emission for %q (x%d)", p, n)
+		}
+	}
+}
