@@ -247,42 +247,6 @@ func searchRoots(repo, version, archSubdir, accelSubdir string) []string {
 	return roots
 }
 
-// withAncestors expands the collected paths so every ancestor directory
-// between the tar working dir and each entry is emitted as an explicit
-// member. Tar entry omission of ancestors makes cvmfs_server ingest
-// synthesize them at extract time, which (as of cvmfs 2.14.x) records
-// uid/gid as (uid_t)-1 (4294967295) in the catalog; such entries publish
-// but every subsequent write-path operation against them (copy-up into a
-// transaction, marker creation, chown) fails with EOVERFLOW. Parents are
-// sorted before the entry itself so the stream reads naturally.
-// See debug/2026-09-10-ingest-publish-eoverflow.md.
-func withAncestors(workdir string, paths []string) []string {
-	if workdir == "/" || !strings.HasSuffix(workdir, "versions") {
-		// safety rail: the walk up parents is only sane for our known layout
-		return paths
-	}
-	seen := make(map[string]struct{}, len(paths))
-	var expanded []string
-	for _, p := range paths {
-		var chain []string
-		for d := path.Dir(p); d != workdir && d != "." && strings.HasPrefix(d, workdir); d = path.Dir(d) {
-			if _, dup := seen[d]; !dup {
-				seen[d] = struct{}{}
-				chain = append(chain, d)
-			}
-		}
-		// emit parents before the entry
-		for i := len(chain) - 1; i >= 0; i-- {
-			expanded = append(expanded, chain[i])
-		}
-		if _, dup := seen[p]; !dup {
-			seen[p] = struct{}{}
-			expanded = append(expanded, p)
-		}
-	}
-	return expanded
-}
-
 // MakeListFile collects any visible paths along the "software" and
 // "modules" subdirectories of the overlayfs. A visible path in this
 // context will equate to a software/module combination, or set of
@@ -329,8 +293,6 @@ func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, erro
 	}
 
 	workdir := versionsDir(repo)
-	fileList = withAncestors(workdir, fileList)
-
 	tmpfile, err := newListFile()
 	if err != nil {
 		return nil, err
