@@ -20,16 +20,17 @@ import (
 )
 
 // ExecTar constructs the tarball in three passes:
-//   1. tar --exclude=*.wh.* -C ${TOPDIR} -cf ${TARBALL} --files-from=${ROOTS}
-//   2. tar -rf ${TARBALL} -C ${TOPDIR} --no-recursion --files-from=${ANCESTORS}
-//   3. gzip -9f ${TARBALL}
+//  1. tar -cf ${TARBALL} -C ${TOPDIR} --no-recursion --files-from=${ANCESTORS}
+//  2. tar --exclude=*.wh.* -rf ${TARBALL} -C ${TOPDIR} --files-from=${ROOTS}
+//  3. gzip -9f ${TARBALL}
 //
-// Pass 1 carries the collected build roots exactly as crtar always has.
-// Pass 2 appends their ancestor dirs as non-recursive members so the
-// publisher never synthesizes them with sentinel uid/gid ((uid_t)-1 /
-// nobody:nogroup — EOVERFLOW poison for all later write-path ops; see the
-// withAncestors doc). Appending to a gzip stream is impossible, hence the
-// explicit third pass.
+// Ancestors MUST stream first (learned the hard way 2026-09-11): the
+// ingest-side itemizer synthesizes absent parent dirs on demand when a
+// payload file arrives, stamping them sentinel (uid_t)-1; dir members
+// arriving AFTER their descendants hit an existing row and are silently
+// dropped — the sentinel stands. Shipping every ancestor ahead of any
+// descendant is what keeps the real row. Appending to a gzip stream is
+// impossible, hence the explicit third pass.
 //
 // NOTE on exclusions: --exclude=.cvmfscatalog was dropped on 2026-09-11 after
 // e2 (debug/repro-eoverflow/) proved a .cvmfscatalog member survives ingest
@@ -77,19 +78,25 @@ func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, roots, ancestor
 		return nil
 	}
 
-	pass1 := append([]string{"tar", "--exclude=*.wh.*", "-C", workingDir,
-		"-cf", plain, "--files-from=" + roots.Name()}, ownArgs...)
-	if err := run(pass1); err != nil {
-		return "", fmt.Errorf("creating tarball %s failed: %w", plain, err)
-	}
-
 	// ancestors pass may be legitimately empty (e.g. synthetic fixtures);
-	// appending zero members is fine but wastes a process, so skip it
+	// then the roots pass alone creates the archive.
 	if info, err := ancestors.Stat(); err == nil && info.Size() > 0 {
-		pass2 := append([]string{"tar", "-rf", plain, "-C", workingDir,
+		pass1 := append([]string{"tar", "-cf", plain, "-C", workingDir,
 			"--no-recursion", "--files-from=" + ancestors.Name()}, ownArgs...)
+		if err := run(pass1); err != nil {
+			return "", fmt.Errorf("creating tarball %s failed: %w", plain, err)
+		}
+
+		pass2 := append([]string{"tar", "--exclude=*.wh.*", "-rf", plain, "-C", workingDir,
+			"--files-from=" + roots.Name()}, ownArgs...)
 		if err := run(pass2); err != nil {
-			return "", fmt.Errorf("appending ancestor members to %s failed: %w", plain, err)
+			return "", fmt.Errorf("appending root members to %s failed: %w", plain, err)
+		}
+	} else {
+		single := append([]string{"tar", "--exclude=*.wh.*", "-C", workingDir,
+			"-cf", plain, "--files-from=" + roots.Name()}, ownArgs...)
+		if err := run(single); err != nil {
+			return "", fmt.Errorf("creating tarball %s failed: %w", plain, err)
 		}
 	}
 

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -526,6 +527,16 @@ func TestExecTar_AncestorsOnce(t *testing.T) {
 	if err := os.Chmod(pkgdir, 0o750); err != nil {
 		t.Fatal(err)
 	}
+	// a payload file deep under the root: this is what made rc19 mint the
+	// sentinel at publish time — parents must stream ahead of descendants,
+	// else the ingest-side itemizer creates them on demand as (uid_t)-1
+	payload := filepath.Join(pkgdir, "bin", "stata-se")
+	if err := os.MkdirAll(filepath.Dir(payload), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(payload, []byte("#!/bin/sh\necho stata\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	outdir := t.TempDir()
 	rel := func(p string) string {
@@ -568,6 +579,27 @@ func TestExecTar_AncestorsOnce(t *testing.T) {
 	for name, n := range counts {
 		if n > 1 {
 			t.Errorf("in-archive duplicate for %q (%d) — ingest AddEntry assert shape", name, n)
+		}
+	}
+
+	// ORDERING CONTRACT (2026-09-11 Gaussian replay defect): every ancestor
+	// dir must precede every descendant member. The ingest itemizer
+	// synthesizes an absent parent on demand when a payload file arrives,
+	// stamps it (uid_t)-1, then silently drops the real dir member that
+	// shows up later — the sentinel row stands.
+	firstIdx := map[string]int{}
+	for i, h := range hdrs {
+		name := strings.TrimSuffix(h.Name, "/")
+		if _, ok := firstIdx[name]; !ok {
+			firstIdx[name] = i
+		}
+	}
+	for name, i := range firstIdx {
+		for anc := path.Dir(name); anc != "." && anc != ""; anc = path.Dir(anc) {
+			if j, ok := firstIdx[anc]; ok && j > i {
+				t.Errorf("ancestor %q (member %d) streams AFTER descendant %q (member %d) — sentinel mint shape",
+					anc, j, name, i)
+			}
 		}
 	}
 }
