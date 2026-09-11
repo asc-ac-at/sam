@@ -19,59 +19,91 @@ import (
 	"github.com/asc-ac-at/sam/pkg/subproc"
 )
 
-// ExecTar constructs a "tar" command and
-// tar --exclude=.cvmfscatalog --exclude=*.wh.* -C ${TOPDIR} -czf ${TARBALL} --files-from=${FILES_LIST}
-// TOPDIR=workingDir
-// TARBALL=tarballName
-// FILES_LIST=listFile
-// Change to the workingDir and create a tarball named tarballName using the
-// files in the listFile. Exclude anything mathching the two regular expressions
-// at the front of the args slice. Returns the absolute path of the tarball.
-// accelSubdir may be empty (CPU-only build) or an EESSI-style accelerator
-// subdir relative to the arch dir (e.g. accel/nvidia/cc100); when set it is
-// included in the tarball name.
-func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, listFile *os.File, owner, group string) (string, error) {
-	// the list file is single-use: consume it here and clean it up, it
-	// carries no value after the tarball exists
-	defer os.Remove(listFile.Name())
-	var args []string
-	// second exclude is redundant because of the filter below
-	args = append(args, "tar", "--exclude=.cvmfscatalog", "--exclude=*.wh.*")
-	workingDir := versionsDir(repo)
-	args = append(args, "-C", workingDir)
-	tarball := tarballPath(archSubdir, accelSubdir, name, outdir)
-	args = append(args, "-czf", tarball)
-	filesFrom := fmt.Sprintf("--files-from=%s", listFile.Name())
-	args = append(args, filesFrom)
+// ExecTar constructs the tarball in three passes:
+//   1. tar --exclude=*.wh.* -C ${TOPDIR} -cf ${TARBALL} --files-from=${ROOTS}
+//   2. tar -rf ${TARBALL} -C ${TOPDIR} --no-recursion --files-from=${ANCESTORS}
+//   3. gzip -9f ${TARBALL}
+//
+// Pass 1 carries the collected build roots exactly as crtar always has.
+// Pass 2 appends their ancestor dirs as non-recursive members so the
+// publisher never synthesizes them with sentinel uid/gid ((uid_t)-1 /
+// nobody:nogroup — EOVERFLOW poison for all later write-path ops; see the
+// withAncestors doc). Appending to a gzip stream is impossible, hence the
+// explicit third pass.
+//
+// NOTE on exclusions: --exclude=.cvmfscatalog was dropped on 2026-09-11 after
+// e2 (debug/repro-eoverflow/) proved a .cvmfscatalog member survives ingest
+// and lands correctly. Gate markers now travel deliberately: the build
+// recipe places the marker in-tree; crtar transports. The whiteout
+// exclude stays (overlayfs guts never belong in a repo).
+func ExecTar(repo, archSubdir, accelSubdir, name, outdir string, roots, ancestors *os.File, owner, group string) (string, error) {
+	// the list files are single-use: consume them here and clean up, they
+	// carry no value after the tarball exists
+	defer os.Remove(roots.Name())
+	defer os.Remove(ancestors.Name())
 
+	workingDir := versionsDir(repo)
+	tarball := tarballPath(archSubdir, accelSubdir, name, outdir)
+	// uncompressed intermediate; gzip joins at the end (appending to a gzip
+	// stream is impossible, hence pass 2 runs against the plain tar)
+	plain := strings.TrimSuffix(tarball, ".tar.gz") + ".tar"
+
+	ownArgs := []string{}
 	// optionally change ownership of files being packed into tarball
 	if (owner != "") || (group != "") {
-		args = append(args, "--numeric-owner")
+		ownArgs = append(ownArgs, "--numeric-owner")
 	}
 	if owner != "" {
-		u := fmt.Sprintf("--owner=%s", owner)
-		args = append(args, u)
+		ownArgs = append(ownArgs, fmt.Sprintf("--owner=%s", owner))
 	}
 	if group != "" {
-		g := fmt.Sprintf("--group=%s", group)
-		args = append(args, g)
+		ownArgs = append(ownArgs, fmt.Sprintf("--group=%s", group))
 	}
 
 	lockFile, lferr := acquireLockfile(tarball)
 	if lferr != nil {
 		return "", fmt.Errorf("could not acquire lockfile: %w", lferr)
 	}
+	defer removeLockfile(lockFile)
 
-	var stderr bytes.Buffer
-	cfg := subproc.New(args)
-	cfg.Stdout = io.Discard
-	cfg.Stderr = &stderr
-
-	if err := cfg.Run(); err != nil {
-		return "", fmt.Errorf("creating tarball %s failed %w: %s", tarball, err, strings.TrimSpace(stderr.String()))
+	run := func(args []string) error {
+		var stderr bytes.Buffer
+		cfg := subproc.New(args)
+		cfg.Stdout = io.Discard
+		cfg.Stderr = &stderr
+		if err := cfg.Run(); err != nil {
+			return fmt.Errorf("%s failed %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
+		}
+		return nil
 	}
+
+	pass1 := append([]string{"tar", "--exclude=*.wh.*", "-C", workingDir,
+		"-cf", plain, "--files-from=" + roots.Name()}, ownArgs...)
+	if err := run(pass1); err != nil {
+		return "", fmt.Errorf("creating tarball %s failed: %w", plain, err)
+	}
+
+	// ancestors pass may be legitimately empty (e.g. synthetic fixtures);
+	// appending zero members is fine but wastes a process, so skip it
+	if info, err := ancestors.Stat(); err == nil && info.Size() > 0 {
+		pass2 := append([]string{"tar", "-rf", plain, "-C", workingDir,
+			"--no-recursion", "--files-from=" + ancestors.Name()}, ownArgs...)
+		if err := run(pass2); err != nil {
+			return "", fmt.Errorf("appending ancestor members to %s failed: %w", plain, err)
+		}
+	}
+
+	if err := run([]string{"gzip", "-9f", plain}); err != nil {
+		return "", fmt.Errorf("compressing %s failed: %w", plain, err)
+	}
+
+	// guard: gzip -f renames in place; fail loudly if the expected final
+	// artifact is missing (never ship a silent half-built tarball)
+	if _, err := os.Stat(tarball); err != nil {
+		return "", fmt.Errorf("expected final tarball %s missing after gzip: %w", tarball, err)
+	}
+
 	slog.Info("created tarball", "path", tarball)
-	removeLockfile(lockFile)
 	return tarball, nil
 }
 
@@ -247,6 +279,74 @@ func searchRoots(repo, version, archSubdir, accelSubdir string) []string {
 	return roots
 }
 
+// withAncestors expands the collected paths with every ancestor directory
+// between the tar working dir and each entry, deduped, parents first.
+// Published catalog surgery (2026-09-11, debug/repro-eoverflow/, variants
+// r1 vs r2) proved: members missing from the tar get synthesized by
+// cvmfs_server ingest with uid/gid = (uid_t)-1 (rendered nobody:nogroup),
+// and such rows poison every later write-path op through the publisher
+// transaction (EOVERFLOW). Ancestors are emitted via a separate
+// --no-recursion --files-from pass, never in the same list as the roots:
+// single-list emission would recurse into the ancestors and duplicate
+// every child member, which trips AddEntry's primary-key constraint
+// (catalog_rw.cc:165 assert).
+func withAncestors(workdir string, paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		seen[p] = struct{}{}
+	}
+	var chain []string
+	for _, p := range paths {
+		for d := path.Dir(p); d != workdir && d != "." && strings.HasPrefix(d, workdir); d = path.Dir(d) {
+			if _, dup := seen[d]; dup {
+				continue
+			}
+			seen[d] = struct{}{}
+			chain = append(chain, d)
+		}
+	}
+	return chain
+}
+
+// writeListFile renders collected paths (absolute at call time) relative to
+// the tar working dir and writes them, one per line, into a fresh temp file.
+// Members must be RELATIVE to workdir (the tar -C dir): py-auto-ingest
+// plants the tarball under <repo>/versions via cvmfs_server ingest
+// -b versions, and re-roots anything else under that base, burying the
+// payload. Error hard on any path that escapes the working dir.
+func writeMemberList(workdir string, paths []string) (*os.File, error) {
+	tmpfile, err := newListFile()
+	if err != nil {
+		return nil, err
+	}
+	wdPrefix := workdir + string(os.PathSeparator)
+	writer := bufio.NewWriter(tmpfile)
+	for _, s := range paths {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if !strings.HasPrefix(s, wdPrefix) {
+			tmpfile.Close()
+			return nil, fmt.Errorf("collected path %q escapes tar working dir %s", s, workdir)
+		}
+		rel := filepath.ToSlash(strings.TrimPrefix(s, wdPrefix))
+		if _, err := writer.WriteString(rel + "\n"); err != nil {
+			tmpfile.Close()
+			return nil, fmt.Errorf("writing to temp file %s: %w", tmpfile.Name(), err)
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		tmpfile.Close()
+		return nil, fmt.Errorf("flushing temp file %s: %w", tmpfile.Name(), err)
+	}
+	if err := tmpfile.Sync(); err != nil {
+		tmpfile.Close()
+		return nil, fmt.Errorf("syncing temp file %s: %w", tmpfile.Name(), err)
+	}
+	return tmpfile, nil
+}
+
 // MakeListFile collects any visible paths along the "software" and
 // "modules" subdirectories of the overlayfs. A visible path in this
 // context will equate to a software/module combination, or set of
@@ -259,7 +359,11 @@ func searchRoots(repo, version, archSubdir, accelSubdir string) []string {
 // the accel tree and a CPU-only build only the CPU tree, so a missing
 // subtree is skipped (as in EESSI's create_tarball.sh) rather than treated
 // as an error. Finding nothing at all is an error.
-func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, error) {
+//
+// Returns two files: the roots list (the historical crtar behavior) and
+// the ancestors list (their complete ancestor chains, for the separate
+// --no-recursion pass in ExecTar — see withAncestors).
+func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, *os.File, error) {
 
 	roots := searchRoots(repo, version, archSubdir, accelSubdir)
 
@@ -270,7 +374,7 @@ func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, erro
 		if _, err := os.Stat(path.Join(root, "modules")); err == nil {
 			modules, err := findModules(root)
 			if err != nil {
-				return nil, fmt.Errorf("finding modules under %s: %w", root, err)
+				return nil, nil, fmt.Errorf("finding modules under %s: %w", root, err)
 			}
 			fileList = append(fileList, modules...)
 		} else {
@@ -280,7 +384,7 @@ func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, erro
 		if _, err := os.Stat(path.Join(root, "software")); err == nil {
 			software, err := findSoftware(root)
 			if err != nil {
-				return nil, fmt.Errorf("finding software under %s: %w", root, err)
+				return nil, nil, fmt.Errorf("finding software under %s: %w", root, err)
 			}
 			fileList = append(fileList, software...)
 		} else {
@@ -289,52 +393,20 @@ func MakeListFile(repo, version, archSubdir, accelSubdir string) (*os.File, erro
 	}
 
 	if len(fileList) == 0 {
-		return nil, fmt.Errorf("nothing to pack: no built modules or software found under %s", strings.Join(roots, ", "))
+		return nil, nil, fmt.Errorf("nothing to pack: no built modules or software found under %s", strings.Join(roots, ", "))
 	}
 
 	workdir := versionsDir(repo)
-	tmpfile, err := newListFile()
+
+	rootsFile, err := writeMemberList(workdir, fileList)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// members must be RELATIVE to workdir (the tar -C dir): py-auto-ingest
-	// plants the tarball under <repo>/versions via cvmfs_server ingest
-	// -b versions, and re-roots anything else under that base, burying the
-	// payload. Error hard on any path that escapes the working dir.
-	wdPrefix := workdir + string(os.PathSeparator)
-	for i, s := range fileList {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if !strings.HasPrefix(s, wdPrefix) {
-			tmpfile.Close()
-			return nil, fmt.Errorf("collected path %q escapes tar working dir %s", s, workdir)
-		}
-		fileList[i] = filepath.ToSlash(strings.TrimPrefix(s, wdPrefix))
+	ancFile, err := writeMemberList(workdir, withAncestors(workdir, fileList))
+	if err != nil {
+		rootsFile.Close()
+		os.Remove(rootsFile.Name())
+		return nil, nil, err
 	}
-
-	// write any files we've found
-	writer := bufio.NewWriter(tmpfile)
-	for _, s := range fileList {
-		if s == "" {
-			continue
-		}
-		if _, err := writer.WriteString(s + "\n"); err != nil {
-			tmpfile.Close()
-			return nil, fmt.Errorf("writing to temp file %s: %w", tmpfile.Name(), err)
-		}
-	}
-	// flush buffer
-	if err := writer.Flush(); err != nil {
-		tmpfile.Close()
-		return nil, fmt.Errorf("flushing temp file %s: %w", tmpfile.Name(), err)
-	}
-
-	// ensure data on disk
-	if err := tmpfile.Sync(); err != nil {
-		tmpfile.Close()
-		return nil, fmt.Errorf("syncing temp file %s: %w", tmpfile.Name(), err)
-	}
-	return tmpfile, nil
+	return rootsFile, ancFile, nil
 }

@@ -93,13 +93,13 @@ func main() {
 	if cfg.verbose {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
-	listFile, err := crtar.MakeListFile(cfg.repo, cfg.eessiVersion, cfg.archSubdir, cfg.accelSubdir)
+	rootsFile, ancFile, err := crtar.MakeListFile(cfg.repo, cfg.eessiVersion, cfg.archSubdir, cfg.accelSubdir)
 	if err != nil {
 		slog.Error("making list file", "error", err)
 		os.Exit(1)
 	}
 
-	tarball, err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.accelSubdir, cfg.name, cfg.outputDir, listFile, cfg.owner, cfg.group)
+	tarball, err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.accelSubdir, cfg.name, cfg.outputDir, rootsFile, ancFile, cfg.owner, cfg.group)
 	if err != nil {
 		slog.Error("execTar failed", "error", err)
 		os.Exit(1)

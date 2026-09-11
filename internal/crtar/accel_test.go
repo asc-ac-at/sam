@@ -69,11 +69,13 @@ func TestMakeListFile_ArchAndAccel(t *testing.T) {
 	mkModuleAndSoftware(t, cpuRoot, "Go", "1.25.7")
 	mkModuleAndSoftware(t, accelRoot, "NVHPC", "25.9")
 
-	lf, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir)
+	lf, ancF, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir)
 	if err != nil {
 		t.Fatalf("MakeListFile: %v", err)
 	}
 
+	ancF.Close()
+	defer os.Remove(ancF.Name())
 	lines := readListFile(t, lf)
 	joined := strings.Join(lines, "\n")
 	for _, want := range []string{
@@ -100,11 +102,13 @@ func TestMakeListFile_AccelOnly(t *testing.T) {
 	accelRoot := filepath.Join(archDir(repo, "2025.06", testArchSubdir), testAccelSubdir)
 	mkModuleAndSoftware(t, accelRoot, "NVHPC", "25.9")
 
-	lf, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir)
+	lf, ancF, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir)
 	if err != nil {
 		t.Fatalf("MakeListFile: %v", err)
 	}
 
+	ancF.Close()
+	defer os.Remove(ancF.Name())
 	lines := readListFile(t, lf)
 	joined := strings.Join(lines, "\n")
 	for _, want := range []string{
@@ -126,7 +130,7 @@ func TestMakeListFile_NothingFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir); err == nil {
+	if _, _, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir); err == nil {
 		t.Fatal("expected error when nothing was built into the overlay")
 	} else if !strings.Contains(err.Error(), "nothing to pack") {
 		t.Errorf("error should state nothing was found, got: %v", err)
@@ -167,12 +171,12 @@ func TestExecTar_AccelNameOnDisk(t *testing.T) {
 	mkModuleAndSoftware(t, accelRoot, "NVHPC", "25.9")
 
 	outdir := t.TempDir()
-	lf, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir)
+	lf, ancF, err := MakeListFile(repo, "2025.06", testArchSubdir, testAccelSubdir)
 	if err != nil {
 		t.Fatalf("MakeListFile: %v", err)
 	}
 
-	tb, err := ExecTar(repo, testArchSubdir, testAccelSubdir, "sami", outdir, lf, "", "")
+	tb, err := ExecTar(repo, testArchSubdir, testAccelSubdir, "sami", outdir, lf, ancF, "", "")
 	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
 	}
@@ -203,13 +207,18 @@ func TestMakeListFile_ListFileLocation(t *testing.T) {
 	cpuRoot := archDir(repo, "2025.06", testArchSubdir)
 	mkModuleAndSoftware(t, cpuRoot, "Go", "1.25.7")
 
-	lf, err := MakeListFile(repo, "2025.06", testArchSubdir, "")
+	lf, ancF, err := MakeListFile(repo, "2025.06", testArchSubdir, "")
 	if err != nil {
 		t.Fatalf("MakeListFile: %v", err)
 	}
 	if strings.Contains(lf.Name(), "versions") {
 		t.Errorf("list file %s must not live under the versions/ workdir", lf.Name())
 	}
+	if strings.Contains(ancF.Name(), "versions") {
+		t.Errorf("ancestor list file %s must not live under the versions/ workdir", ancF.Name())
+	}
+	ancF.Close()
+	os.Remove(ancF.Name())
 	if strings.Contains(filepath.Base(lf.Name()), "/") {
 		t.Errorf("list file name must be flat, got %s", lf.Name())
 	}
@@ -228,7 +237,7 @@ func TestMakeListFile_IgnoresStrayListFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lf, err := MakeListFile(repo, "2025.06", testArchSubdir, "")
+	lf, ancF, err := MakeListFile(repo, "2025.06", testArchSubdir, "")
 	if err != nil {
 		t.Fatalf("MakeListFile: %v", err)
 	}
@@ -239,7 +248,7 @@ func TestMakeListFile_IgnoresStrayListFiles(t *testing.T) {
 
 	// ExecTar must clean up the list file after the run
 	outdir := t.TempDir()
-	tb, err := ExecTar(repo, testArchSubdir, "", "sami", outdir, lf, "", "")
+	tb, err := ExecTar(repo, testArchSubdir, "", "sami", outdir, lf, ancF, "", "")
 	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
 	}
