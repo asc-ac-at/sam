@@ -25,6 +25,15 @@ echo {{ .Name }} | grep -iq cuda
 if [ "$?" -eq 0 ]; then
     module unuse $(echo "$MODULEPATH" | tr ':' '\n' | grep -E 'eessi\.io/.*accel')
 fi
+
+# Detect CUDA compute capability from the build node's GPU (X.Y, as EasyBuild expects).
+# Env wins over cuda_cc in easyconfigs (cmakemake.py:387); unset means fail loudly, not wrong-arch.
+if [ -z "${EASYBUILD_CUDA_COMPUTE_CAPABILITIES}" ]; then
+    _cc=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1)
+    [ -n "${_cc}" ] && export EASYBUILD_CUDA_COMPUTE_CAPABILITIES="${_cc}"
+    unset _cc
+fi
+
 {{- end }}
 
 {{- range .Easystacks }}
