@@ -10,12 +10,22 @@ unset EESSI_ACCELERATOR_TARGET_OVERRIDE EESSI_ACCELERATOR_TARGET EESSI_ACCEL_SUB
 {{- if .AccelSubdir }}
 export EESSI_ACCELERATOR_TARGET_OVERRIDE={{ .AccelSubdir }}
 export EESSI_ACCELERATOR_INSTALL=1
+
 {{- end }}
 
 source {{ .LmodInit }}
 
 ml --force purge
 ml load "EESSI/{{ .SWSVariant }}"
+
+{{- if .AccelSubdir }}
+# Guard against choking on EESSI's missing cuda modules
+# TODO: make a stronger check here, it's possible someone forgets to pass cuda in the .Name
+echo {{ .Name }} | grep -iq cuda
+if [ "$?" -eq 0 ]; then
+    module unuse $(echo "$MODULEPATH" | tr ':' '\n' | grep -E 'eessi\.io/.*accel')
+fi
+{{- end }}
 
 {{- range .Easystacks }}
 ml load EESSI-extend
