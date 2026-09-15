@@ -120,6 +120,41 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 	}
 }
 
+// TestRenderBuildCmd_EbFailureSalvagesCtrTmp asserts that each failing eb run
+// salvages the container /tmp to <logdir>/ctr-tmp *before* exiting, and that
+// the old (dead) salvage placement in the publish block is gone.
+// See sami TODO-6b2d6f99.
+func TestRenderBuildCmd_EbFailureSalvagesCtrTmp(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
+
+	opts := optsForTest()
+	opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	got := string(content)
+
+	salvage := "cp -a /tmp/ " + data.Logdir + "/ctr-tmp"
+	if n := strings.Count(got, salvage); n != len(opts.Files) {
+		t.Errorf("expected one salvage copy per easystack (%d), got %d", len(opts.Files), n)
+	}
+	if !strings.Contains(got, salvage+"\n    exit 1") {
+		t.Errorf("salvage copy should immediately precede the failure exit, got:\n%s", got)
+	}
+	if strings.Contains(got, `[[ "$?" -eq 0 ]]`) {
+		t.Errorf("dead exit-status wrapper around the publish block should be gone, got:\n%s", got)
+	}
+}
+
 // TestRenderBuildCmd_HermeticUserNamespace asserts the rendered build script
 // unsets EESSI_USER_INSTALL so EasyBuild never resolves dependencies against
 // the builder's personal user install ($HOME/eessi) - see sami TODO-dd222a56.
@@ -228,6 +263,7 @@ func TestRenderBuildCmd_PublishLogdir(t *testing.T) {
 	t.Run("concrete logdir in failure branch", func(t *testing.T) {
 
 		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.4.0-nvidia-nvhpc-25.9.yaml"}
 		data, err := NewCvmfsBuildCmdData(opts)
 
 		if err != nil {
@@ -258,6 +294,7 @@ func TestRenderBuildCmd_PublishLogdir(t *testing.T) {
 	t.Run("empty basepath renders degenerate path", func(t *testing.T) {
 		opts := optsForTest()
 		opts.BuildLogBasePath = ""
+		opts.Files = []string{"asc_eb_5.4.0-nvidia-nvhpc-25.9.yaml"}
 
 		data, err := NewCvmfsBuildCmdData(opts)
 
