@@ -146,6 +146,39 @@ func TestRenderScript_NoPublishNoCreds(t *testing.T) {
 	}
 }
 
+func TestRenderScript_ForwardsSiteToolchains(t *testing.T) {
+	// The wrapper must re-export every EESSI_SITE_TOP_LEVEL_TOOLCHAINS_* var
+	// from the job environment with the APPTAINERENV_ prefix, publish or not:
+	// plain builds need the site toolchains too, and apptainer only maps
+	// prefixed vars back to the unprefixed names inside, even under --cleanenv.
+	loop := `for _eessi_tc_var in "${!EESSI_SITE_TOP_LEVEL_TOOLCHAINS_@}"; do`
+	export_ := `export "APPTAINERENV_${_eessi_tc_var}=${!_eessi_tc_var}"`
+	for _, publish := range []bool{false, true} {
+		var out bytes.Buffer
+		err := RenderScript(ScriptData{
+			Headers:      "#SBATCH -p zen4_gpu",
+			BuildCmdPath: "/logdir/build_cmd.sh",
+			Publish:      publish,
+		}, &out)
+		if err != nil {
+			t.Fatalf("RenderScript(Publish=%v): %v", publish, err)
+		}
+		s := out.String()
+		for _, want := range []string{loop, export_} {
+			if !strings.Contains(s, want) {
+				t.Errorf("Publish=%v: script must forward EESSI_SITE_TOP_LEVEL_TOOLCHAINS_* via APPTAINERENV_, missing %q\ngot:\n%s", publish, want, s)
+			}
+		}
+		// the exports must precede the samctr exec call: apptainer only sees
+		// APPTAINERENV_* vars present in its environment at invocation
+		fi := strings.Index(s, loop)
+		ti := strings.Index(s, "samctr exec")
+		if fi < 0 || fi > ti {
+			t.Errorf("Publish=%v: toolchain forwarding must render before the samctr exec call\ngot:\n%s", publish, s)
+		}
+	}
+}
+
 func TestRenderScript_ComposesHeadersThenBuildCmd(t *testing.T) {
 	f, err := config.LoadSbatchConfig(fixturePath)
 	if err != nil {

@@ -2,6 +2,15 @@
 
 {{ .Headers }}
 
+# site's extra toolchains: EESSI_SITE_TOP_LEVEL_TOOLCHAINS_* come from
+# the node environment propagated into the job.
+# Re-export with the APPTAINERENV_ prefix so apptainer forwards them even
+# under --cleanenv (inner side sees the unprefixed names). No-op when unset.
+for _eessi_tc_var in "${!EESSI_SITE_TOP_LEVEL_TOOLCHAINS_@}"; do
+    export "APPTAINERENV_${_eessi_tc_var}=${!_eessi_tc_var}"
+done
+unset _eessi_tc_var
+
 {{ if .Publish }}# publish: provision rgw/S3 credentials for the containerized build_cmd.sh.
 # The creds file is sourced on the compute node (NFS home is visible there)
 # and the AWS chain is re-exported with the APPTAINERENV_ prefix, which

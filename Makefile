@@ -1,4 +1,4 @@
-VERSION := 0.2.0-rc21
+VERSION := 0.2.0-rc22
 
 BUILDDIR = build
 
