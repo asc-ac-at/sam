@@ -66,7 +66,7 @@ func initializeRepo(opts *shared.Options, blPath *buildlog.BuildLogPaths, logger
 // mutates state by updating the CommitSha field
 func getCommitSha(opts *shared.Options, state *RepoState, logger *slog.Logger) (*RepoState, error) {
 	if opts.GitCommit != "" {
-		state.CommitSha = opts.GitCommit
+		return getCommitShaFromSha(opts.GitCommit, state, logger)
 	}
 	var err error
 	if opts.GitBranch != "" {
@@ -84,7 +84,7 @@ func getCommitSha(opts *shared.Options, state *RepoState, logger *slog.Logger) (
 		}
 		return state, nil
 	}
-	return state, fmt.Errorf("getCommitSha error unkown")
+	return state, fmt.Errorf("no git selector provided: use --git-commit, --git-branch or --git-mr-id")
 }
 
 // checkoutCommit checks out the commit referred to by

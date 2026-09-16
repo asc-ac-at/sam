@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -83,6 +84,29 @@ func getCommitShaFromBranchName(name string, state *RepoState, logger *slog.Logg
 		return state, err
 	}
 	state.CommitSha = sha
+	return state, nil
+}
+
+var fullShaPattern = regexp.MustCompile("^[0-9a-fA-F]{40}$")
+
+// getCommitShaFromSha resolves a user-supplied commit sha by fetching it
+// directly. The ASC GitLab's uploadpack policy permits sha fetches (verified
+// live 2026-09-16). Only full 40-character shas are accepted: shorthand
+// expansion would require additional resolver fetches, so the caller gets an
+// actionable error instead.
+func getCommitShaFromSha(sha string, state *RepoState, logger *slog.Logger) (*RepoState, error) {
+	sha = strings.TrimSpace(sha)
+	if !fullShaPattern.MatchString(sha) {
+		return state, fmt.Errorf("--git-commit requires the full 40-character SHA (got %q); expand shorthand with `git rev-parse <sha>`", sha)
+	}
+	got, err := fetchHead(sha, state, logger)
+	if err != nil {
+		return state, err
+	}
+	if !strings.EqualFold(got, sha) {
+		return state, fmt.Errorf("fetch of %q resolved to unexpected sha %q", sha, got)
+	}
+	state.CommitSha = got
 	return state, nil
 }
 
