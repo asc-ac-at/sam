@@ -7,6 +7,11 @@ export EESSI_SITE_SOFTWARE_PREFIX={{ .CvmfsRepo }}
 # hermetic target selection: build env must not inherit the login shell's view
 unset EESSI_USER_INSTALL || true
 unset EESSI_ACCELERATOR_TARGET_OVERRIDE EESSI_ACCELERATOR_TARGET EESSI_ACCEL_SUBDIR EESSI_ACCEL_SOFTWARE_SUBDIR_OVERRIDE
+
+# Bugfixes
+# need this to fix issue with failing downloads when using Easybuild
+export SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt
+
 {{- if .AccelSubdir }}
 export EESSI_ACCELERATOR_TARGET_OVERRIDE={{ .AccelSubdir }}
 export EESSI_ACCELERATOR_INSTALL=1
