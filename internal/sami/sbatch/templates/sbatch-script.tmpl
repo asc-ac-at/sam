@@ -38,6 +38,8 @@ if [ -f "${_rgw_cert}" ]; then
 fi
 unset _rgw_cert
 
+export APPTAINERENV_EB_PARALLEL="${EB_PARALLEL:-${SLURM_CPUS_PER_TASK}}"
+
 {{ end }}samctr exec \
     --cleanenv \
     -- /bin/sh <{{ .BuildCmdPath }}

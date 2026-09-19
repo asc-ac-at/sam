@@ -53,7 +53,7 @@ if [ ! -f ${stack_file} ]; then
     exit 1
 fi
 
-eb -r --easystack ${stack_file}
+eb --parallel="${EB_PARALLEL:-$(nproc)}" -r --easystack ${stack_file}
 if [[ "$?" -ne 0 ]]; then
     printf "ERR - easybuild failed for ${stack_file}\n"
     # salvage the container /tmp (build dir, eb logs, shell command outputs) for post-mortem
