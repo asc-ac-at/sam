@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	easybuild "github.com/asc-ac-at/sam/internal/sami"
@@ -23,14 +24,17 @@ type CvmfsBuildCmdData struct {
 	RGWEndpoint string
 	SWSVariant  string
 	Easystacks  []*easybuild.Easystack
-	Publish     bool
-	LmodInit    string
-	CvmfsRepo   string
-	Template    string
-	Name        string
-	Logdir      string
-	Owner       string
-	Group       string
+	// BuildEnv holds extra KEY=VALUE pairs (--build-env) exported verbatim in
+	// the rendered script, after the hermetic unset block so user vars win.
+	BuildEnv  []string
+	Publish   bool
+	LmodInit  string
+	CvmfsRepo string
+	Template  string
+	Name      string
+	Logdir    string
+	Owner     string
+	Group     string
 }
 
 // NewCvmfsBuildCmdData creates a structure with
@@ -46,6 +50,13 @@ func NewCvmfsBuildCmdData(opts *shared.Options) (*CvmfsBuildCmdData, error) {
 		Owner:      opts.Owner,
 		Group:      opts.Group,
 	}
+	for _, kv := range opts.BuildEnv {
+		key, _, found := strings.Cut(kv, "=")
+		if !found || key == "" {
+			return nil, fmt.Errorf("invalid --build-env entry %q: expected KEY=VALUE", kv)
+		}
+	}
+	cmdData.BuildEnv = opts.BuildEnv
 	// user supplied target files take precedence over changed files in the repo
 	if len(opts.Files) > 0 {
 		var estacks []*easybuild.Easystack

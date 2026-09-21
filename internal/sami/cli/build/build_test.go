@@ -184,6 +184,62 @@ func TestRenderBuildCmd_HermeticUserNamespace(t *testing.T) {
 	}
 }
 
+// TestRenderBuildCmd_BuildEnv asserts that --build-env entries render as
+// verbatim exports, in declaration order, after the hermetic unset block and
+// before the lmod init (TODO-32aed584).
+func TestRenderBuildCmd_BuildEnv(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
+
+	opts := optsForTest()
+	opts.BuildEnv = []string{
+		"EESSI_OVERRIDE_STRICT_INSTALLPATH_CHECK=1",
+		"MY_FLAG=${HOME}/x",
+	}
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	got := string(content)
+
+	for _, kv := range opts.BuildEnv {
+		if !strings.Contains(got, "export "+kv) {
+			t.Errorf("rendered output should contain %q, got:\n%s", "export "+kv, got)
+		}
+	}
+
+	// placement and order: after the hermetic unset, before lmod init,
+	// declaration order preserved
+	iUnset := strings.Index(got, "unset EESSI_ACCELERATOR_TARGET_OVERRIDE")
+	iFirst := strings.Index(got, "export "+opts.BuildEnv[0])
+	iSecond := strings.Index(got, "export "+opts.BuildEnv[1])
+	iLmod := strings.Index(got, "source /cvmfs/software.eessi.io")
+	if !(iUnset >= 0 && iUnset < iFirst && iFirst < iSecond && iSecond < iLmod) {
+		t.Errorf("bad ordering (unset=%d first=%d second=%d lmod=%d):\n%s", iUnset, iFirst, iSecond, iLmod, got)
+	}
+
+	assertBashSyntax(t, outFile)
+}
+
+// TestNewCvmfsBuildCmdData_BuildEnvRejectsMalformed asserts that --build-env
+// entries without KEY=VALUE shape are rejected at construction time.
+func TestNewCvmfsBuildCmdData_BuildEnvRejectsMalformed(t *testing.T) {
+	for _, bad := range []string{"NOEQUALS", "=EMPTYKEY"} {
+		opts := optsForTest()
+		opts.BuildEnv = []string{bad}
+		if _, err := NewCvmfsBuildCmdData(opts); err == nil {
+			t.Errorf("expected error for --build-env entry %q, got nil", bad)
+		}
+	}
+}
+
 func TestRenderBuildCmd_PublishTrue(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
 	if err != nil {

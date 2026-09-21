@@ -7,6 +7,13 @@ export EESSI_SITE_SOFTWARE_PREFIX={{ .CvmfsRepo }}
 # hermetic target selection: build env must not inherit the login shell's view
 unset EESSI_USER_INSTALL || true
 unset EESSI_ACCELERATOR_TARGET_OVERRIDE EESSI_ACCELERATOR_TARGET EESSI_ACCEL_SUBDIR EESSI_ACCEL_SOFTWARE_SUBDIR_OVERRIDE
+{{- if .BuildEnv }}
+
+# extra env vars from --build-env (verbatim; rendered after the hermetic unset)
+{{- range .BuildEnv }}
+export {{ . }}
+{{- end }}
+{{- end }}
 
 # Bugfixes
 # need this to fix issue with failing downloads when using Easybuild
