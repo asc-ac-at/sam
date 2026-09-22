@@ -115,7 +115,7 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 	if !strings.Contains(got, data.SWSVariant) {
 		t.Errorf("rendered output should contain SWSVariant %q", data.SWSVariant)
 	}
-	if !strings.Contains(got, "eb -r --easystack") {
+	if !strings.Contains(got, "eb --parallel=\"${EB_PARALLEL:-$(nproc)}\" -r --easystack") {
 		t.Errorf("rendered output should contain eb command, got: %q", got)
 	}
 }

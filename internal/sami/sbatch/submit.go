@@ -3,7 +3,6 @@ package sbatch
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -24,21 +23,13 @@ type SbatchSubmitter struct {
 	Cfg *command.CmdConfig
 }
 
-// NewSbatchSubmitter creates a Submitter backed by the real sbatch command.
-// runner may be nil, in which case a default one with a 30s timeout is used.
+// NewSbatchSubmitter creates a Submitter that pipes scripts to
+// `sbatch --parsable <flags...>` with a 30s timeout.
 func NewSbatchSubmitter(flags []string) *SbatchSubmitter {
 	prg := []string{"sbatch", "--parsable"}
-	if len(flags) > 0 {
-		prg = append(prg, flags...)
-	}
+	prg = append(prg, flags...)
 	cfg := command.NewCmdConfig(prg)
 	cfg.Timeout = defaultSubmitTimeout
-
-	var stderr bytes.Buffer
-
-	cfg.Stdout = io.Discard
-	cfg.Stderr = &stderr
-
 	return &SbatchSubmitter{Cfg: cfg}
 }
 
