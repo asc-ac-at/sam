@@ -26,8 +26,12 @@ type SbatchSubmitter struct {
 
 // NewSbatchSubmitter creates a Submitter backed by the real sbatch command.
 // runner may be nil, in which case a default one with a 30s timeout is used.
-func NewSbatchSubmitter() *SbatchSubmitter {
-	cfg := command.NewCmdConfig([]string{"sbatch", "--parsable"})
+func NewSbatchSubmitter(flags []string) *SbatchSubmitter {
+	prg := []string{"sbatch", "--parsable"}
+	if len(flags) > 0 {
+		prg = append(prg, flags...)
+	}
+	cfg := command.NewCmdConfig(prg)
 	cfg.Timeout = defaultSubmitTimeout
 
 	var stderr bytes.Buffer

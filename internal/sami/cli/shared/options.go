@@ -42,6 +42,7 @@ type Options struct {
 	BuildEnv         []string `flag:"build-env"`
 	Owner            string   `flag:"owner"`
 	Group            string   `flag:"group"`
+	SbatchFlags      []string `flag:"sbatch-flags"`
 }
 
 func NewOptions() *Options {
@@ -68,5 +69,6 @@ func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
 	cmd.PersistentFlags().StringArrayVar(&opts.BuildEnv, "build-env", opts.BuildEnv, "Extra KEY=VALUE exported in build_cmd.sh (repeatable). Rendered verbatim; takes precedence over the hermetic unset of EESSI_* vars.")
 	cmd.PersistentFlags().StringVar(&opts.Owner, "owner", opts.Owner, "Force NAME as owner for added files. Absent uid, lookup on host. See man tar.")
 	cmd.PersistentFlags().StringVar(&opts.Group, "group", opts.Group, "Force NAME as group for added files. Absent gid, lookup on host. See man tar.")
+	cmd.PersistentFlags().StringArrayVar(&opts.SbatchFlags, "sbatch-flags", opts.SbatchFlags, "Extra --flag=value added to the sbatch job script. Rendered verbatim.")
 	return opts
 }
