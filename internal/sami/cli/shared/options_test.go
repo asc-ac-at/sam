@@ -1,8 +1,11 @@
 package shared
 
 import (
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestNewOptions_Defaults(t *testing.T) {
@@ -101,6 +104,82 @@ func TestNewOptions_BuildBackendDefault(t *testing.T) {
 	opts := NewOptions()
 	if opts.BuildBackend != string(BackendLocal) {
 		t.Errorf("expected BuildBackend default 'local', got %q", opts.BuildBackend)
+	}
+}
+
+// parseWith runs the flag machinery of a throwaway command and returns the
+// resulting options, so tests exercise the real cobra/pflag binding.
+func parseWith(t *testing.T, args []string) *Options {
+	t.Helper()
+	opts := NewOptions()
+	cmd := &cobra.Command{
+		Use:  "test",
+		RunE: func(cmd *cobra.Command, args []string) error { return nil },
+	}
+	RegisterFlags(cmd, opts)
+	cmd.SetArgs(args)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("parsing %v: %v", args, err)
+	}
+	return opts
+}
+
+func TestRegisterFlags_SbatchFlagsRepeatable(t *testing.T) {
+	opts := parseWith(t, []string{
+		"--sbatch-flags=--dependency=afterok:123",
+		"--sbatch-flags=--hold",
+	})
+	want := []string{"--dependency=afterok:123", "--hold"}
+	if !reflect.DeepEqual(opts.SbatchFlags, want) {
+		t.Errorf("SbatchFlags: got %v, want %v", opts.SbatchFlags, want)
+	}
+}
+
+// pflag must take the next argument as the value even when it starts with
+// dashes; that is how sbatch options are written on the sam command line.
+func TestRegisterFlags_SbatchFlagsSpaceSeparatedValue(t *testing.T) {
+	opts := parseWith(t, []string{"--sbatch-flags", "--dependency=afterok:9"})
+	want := []string{"--dependency=afterok:9"}
+	if !reflect.DeepEqual(opts.SbatchFlags, want) {
+		t.Errorf("SbatchFlags: got %v, want %v", opts.SbatchFlags, want)
+	}
+}
+
+// StringArray (unlike StringSlice) must not split on commas: values pass
+// through verbatim. CSV splitting would break e.g. --dependency=afterok:1:2.
+func TestRegisterFlags_SbatchFlagsNoCommaSplit(t *testing.T) {
+	opts := parseWith(t, []string{"--sbatch-flags=--dependency=afterok:1:2,afterany:3"})
+	want := []string{"--dependency=afterok:1:2,afterany:3"}
+	if !reflect.DeepEqual(opts.SbatchFlags, want) {
+		t.Errorf("SbatchFlags: got %v, want %v", opts.SbatchFlags, want)
+	}
+}
+
+// Every `flag:"name"` struct tag must match the name RegisterFlags binds
+// the field to. Fields without a tag (GitBranch, GitCommit) are skipped.
+func TestRegisterFlags_TagsMatchFlagNames(t *testing.T) {
+	opts := NewOptions()
+	cmd := &cobra.Command{Use: "test"}
+	RegisterFlags(cmd, opts)
+
+	typ := reflect.TypeOf(*opts)
+	for i := 0; i < typ.NumField(); i++ {
+		tag, ok := typ.Field(i).Tag.Lookup("flag")
+		if !ok {
+			continue
+		}
+		// RegisterFlags binds on PersistentFlags; cmd.Flags() only sees them
+		// after Execute merges the sets, so look them up at the source.
+		if cmd.PersistentFlags().Lookup(tag) == nil {
+			t.Errorf("field %s: tag %q matches no registered flag", typ.Field(i).Name, tag)
+		}
+	}
+}
+
+func TestRegisterFlags_SbatchFlagsDefaultEmpty(t *testing.T) {
+	opts := parseWith(t, nil)
+	if len(opts.SbatchFlags) != 0 {
+		t.Errorf("expected no SbatchFlags by default, got %v", opts.SbatchFlags)
 	}
 }
 
