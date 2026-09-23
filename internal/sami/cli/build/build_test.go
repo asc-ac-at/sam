@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -115,8 +116,12 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 	if !strings.Contains(got, data.SWSVariant) {
 		t.Errorf("rendered output should contain SWSVariant %q", data.SWSVariant)
 	}
-	if !strings.Contains(got, "eb --parallel=\"${EB_PARALLEL:-$(nproc)}\" -r --easystack") {
+	ebCmd := "eb --parallel=\"${EB_PARALLEL:-$(nproc)}\""
+	if !strings.Contains(got, ebCmd) {
 		t.Errorf("rendered output should contain eb command, got: %q", got)
+	}
+	if !strings.Contains(got, "-r --easystack ${stack_file}") {
+		t.Errorf("rendered output should contain the easystack argument, got: %q", got)
 	}
 }
 
@@ -712,7 +717,7 @@ func TestRenderBuildCmd_PublishRGWNoEndpoint(t *testing.T) {
 func TestRenderBuildCmd_TarballOnlyAfterEbSuccess(t *testing.T) {
 	const (
 		ebInit   = "eb_rc=1"
-		ebRun    = `eb --parallel="${EB_PARALLEL:-$(nproc)}" -r --easystack`
+		ebRun    = `eb --parallel="${EB_PARALLEL:-$(nproc)}"`
 		ebRcCap  = `eb_rc="$?"`
 		failBr   = `if [[ "$eb_rc" -ne 0 ]]; then`
 		tarGuard = `if [[ "$eb_rc" == 0 ]]; then`
@@ -812,6 +817,99 @@ func TestRenderBuildCmd_TarballOnlyAfterEbSuccess(t *testing.T) {
 
 		assertBashSyntax(t, outFile)
 	})
+}
+
+// TestRenderBuildCmd_EbFlags pins the --eb-flags passthrough (commit c35172a,
+// sami TODO-8df7d0e0): each flag renders verbatim on its own continuation
+// line, in declaration order, inside the eb invocation; with no flags the
+// plain two-line eb invocation stays intact.
+func TestRenderBuildCmd_EbFlags(t *testing.T) {
+	const ebRun = `eb --parallel="${EB_PARALLEL:-$(nproc)}" \`
+
+	t.Run("flags render in order on continuation lines", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		opts.EasyBuildFlags = []string{"--rebuild", "--fetch-timeout=60"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		want := ebRun + "\n    --rebuild \\\n    --fetch-timeout=60 \\\n    -r --easystack ${stack_file}"
+		if !strings.Contains(got, want) {
+			t.Errorf("expected flags in declaration order on continuation lines:\n%s\ngot:\n%s", want, got)
+		}
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("no flags keeps the plain eb invocation", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		want := ebRun + "\n    -r --easystack ${stack_file}"
+		if !strings.Contains(got, want) {
+			t.Errorf("expected bare two-line eb invocation:\n%s\ngot:\n%s", want, got)
+		}
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("flags pass through verbatim", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		opts.EasyBuildFlags = []string{"--optarch=GENERIC", "--from-pr 12345"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		for _, f := range opts.EasyBuildFlags {
+			if want := "    " + f + " \\\n"; !strings.Contains(got, want) {
+				t.Errorf("expected flag rendered verbatim as its own continuation line %q, got:\n%s", want, got)
+			}
+		}
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("flags repeat per easystack", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
+		opts.EasyBuildFlags = []string{"--rebuild"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		if n := strings.Count(got, "    --rebuild \\\n"); n != len(opts.Files) {
+			t.Errorf("expected the flag once per easystack (%d), got %d", len(opts.Files), n)
+		}
+		assertBashSyntax(t, outFile)
+	})
+}
+
+// TestNewCvmfsBuildCmdData_EbFlags asserts the --eb-flags values reach the
+// template data unaltered (in particular, no CSV splitting on the way).
+func TestNewCvmfsBuildCmdData_EbFlags(t *testing.T) {
+	opts := optsForTest()
+	opts.EasyBuildFlags = []string{"--rebuild", "--try-amend=a=1,2"}
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+	if !reflect.DeepEqual(data.EasyBuildFlags, opts.EasyBuildFlags) {
+		t.Errorf("EasyBuildFlags = %v, want %v (from opts)", data.EasyBuildFlags, opts.EasyBuildFlags)
+	}
 }
 
 func TestValidatePublish_RequiresRGWBucket(t *testing.T) {

@@ -183,6 +183,44 @@ func TestRegisterFlags_SbatchFlagsDefaultEmpty(t *testing.T) {
 	}
 }
 
+func TestRegisterFlags_EbFlagsRepeatable(t *testing.T) {
+	opts := parseWith(t, []string{
+		"--eb-flags=--rebuild",
+		"--eb-flags=--fetch-timeout=60",
+	})
+	want := []string{"--rebuild", "--fetch-timeout=60"}
+	if !reflect.DeepEqual(opts.EasyBuildFlags, want) {
+		t.Errorf("EasyBuildFlags: got %v, want %v", opts.EasyBuildFlags, want)
+	}
+}
+
+// pflag must take the next argument as the value even when it starts with
+// dashes; that is how easybuild options are written on the sam command line.
+func TestRegisterFlags_EbFlagsSpaceSeparatedValue(t *testing.T) {
+	opts := parseWith(t, []string{"--eb-flags", "--from-pr"})
+	want := []string{"--from-pr"}
+	if !reflect.DeepEqual(opts.EasyBuildFlags, want) {
+		t.Errorf("EasyBuildFlags: got %v, want %v", opts.EasyBuildFlags, want)
+	}
+}
+
+// StringArray (unlike StringSlice) must not split on commas: values pass
+// through verbatim. CSV splitting would break e.g. --try-amend with a list.
+func TestRegisterFlags_EbFlagsNoCommaSplit(t *testing.T) {
+	opts := parseWith(t, []string{"--eb-flags=--try-amend=a=1,2"})
+	want := []string{"--try-amend=a=1,2"}
+	if !reflect.DeepEqual(opts.EasyBuildFlags, want) {
+		t.Errorf("EasyBuildFlags: got %v, want %v", opts.EasyBuildFlags, want)
+	}
+}
+
+func TestRegisterFlags_EbFlagsDefaultEmpty(t *testing.T) {
+	opts := parseWith(t, nil)
+	if len(opts.EasyBuildFlags) != 0 {
+		t.Errorf("expected no EasyBuildFlags by default, got %v", opts.EasyBuildFlags)
+	}
+}
+
 func TestParseBackend(t *testing.T) {
 	cases := []struct {
 		in      string
