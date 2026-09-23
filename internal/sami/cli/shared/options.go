@@ -43,6 +43,7 @@ type Options struct {
 	Owner            string   `flag:"owner"`
 	Group            string   `flag:"group"`
 	SbatchFlags      []string `flag:"sbatch-flags"`
+	EasyBuildFlags   []string `flag:"easybuild-flags"`
 }
 
 func NewOptions() *Options {
@@ -70,5 +71,6 @@ func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
 	cmd.PersistentFlags().StringVar(&opts.Owner, "owner", opts.Owner, "Force NAME as owner for added files. Absent uid, lookup on host. See man tar.")
 	cmd.PersistentFlags().StringVar(&opts.Group, "group", opts.Group, "Force NAME as group for added files. Absent gid, lookup on host. See man tar.")
 	cmd.PersistentFlags().StringArrayVar(&opts.SbatchFlags, "sbatch-flags", opts.SbatchFlags, "Extra flag passed verbatim to the sbatch invocation (repeatable), e.g. --sbatch-flags=--dependency=afterok:<jobid>")
+	cmd.PersistentFlags().StringArrayVar(&opts.EasyBuildFlags, "eb-flags", opts.EasyBuildFlags, "Extra flags passed verbatim to the build_cmd.sh, e.g.: --eb-flags='--rebuild'")
 	return opts
 }

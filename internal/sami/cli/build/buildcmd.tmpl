@@ -50,6 +50,7 @@ fi
 
 eb_rc=1
 {{- $logdir := .Logdir }}
+{{- $ebflags := .EasyBuildFlags }}
 {{- range .Easystacks }}
 ml load EESSI-extend
 ml load {{ .EbVersion }}
@@ -61,7 +62,14 @@ if [ ! -f ${stack_file} ]; then
     exit 1
 fi
 
-eb --parallel="${EB_PARALLEL:-$(nproc)}" -r --easystack ${stack_file}
+eb --parallel="${EB_PARALLEL:-$(nproc)}" \
+{{- if $ebflags }}
+{{- range $ebflags }}
+    {{ . }} \
+{{- end }}
+{{- end }}
+    -r --easystack ${stack_file}
+
 eb_rc="$?"
 if [[ "$eb_rc" -ne 0 ]]; then
     printf "ERR - easybuild failed for ${stack_file}\n"

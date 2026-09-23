@@ -26,15 +26,17 @@ type CvmfsBuildCmdData struct {
 	Easystacks  []*easybuild.Easystack
 	// BuildEnv holds extra KEY=VALUE pairs (--build-env) exported verbatim in
 	// the rendered script, after the hermetic unset block so user vars win.
-	BuildEnv  []string
-	Publish   bool
-	LmodInit  string
-	CvmfsRepo string
-	Template  string
-	Name      string
-	Logdir    string
-	Owner     string
-	Group     string
+	BuildEnv []string
+	// EasyBuildFlags holds extra command line arguments for easybuild
+	EasyBuildFlags []string
+	Publish        bool
+	LmodInit       string
+	CvmfsRepo      string
+	Template       string
+	Name           string
+	Logdir         string
+	Owner          string
+	Group          string
 }
 
 // NewCvmfsBuildCmdData creates a structure with
@@ -57,6 +59,7 @@ func NewCvmfsBuildCmdData(opts *shared.Options) (*CvmfsBuildCmdData, error) {
 		}
 	}
 	cmdData.BuildEnv = opts.BuildEnv
+	cmdData.EasyBuildFlags = opts.EasyBuildFlags
 	// user supplied target files take precedence over changed files in the repo
 	if len(opts.Files) > 0 {
 		var estacks []*easybuild.Easystack
