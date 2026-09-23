@@ -703,6 +703,117 @@ func TestRenderBuildCmd_PublishRGWNoEndpoint(t *testing.T) {
 	}
 }
 
+// TestRenderBuildCmd_TarballOnlyAfterEbSuccess pins commit b8bd207 (sami
+// TODO-7f9116fa): the tar step - plain crtar or the publish/rgw block - runs
+// only under `if [[ "$eb_rc" == 0 ]]`. eb_rc defaults to 1 before the
+// easystack loop and is recaptured after every eb run, so a render with no
+// easystacks can never produce a tarball, and any failed eb run exits before
+// the tar step is reached.
+func TestRenderBuildCmd_TarballOnlyAfterEbSuccess(t *testing.T) {
+	const (
+		ebInit   = "eb_rc=1"
+		ebRun    = `eb --parallel="${EB_PARALLEL:-$(nproc)}" -r --easystack`
+		ebRcCap  = `eb_rc="$?"`
+		failBr   = `if [[ "$eb_rc" -ne 0 ]]; then`
+		tarGuard = `if [[ "$eb_rc" == 0 ]]; then`
+	)
+
+	t.Run("legacy crtar path", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+		data.Publish = false
+
+		got, outFile := renderToDisk(t, data)
+
+		// fail-safe default ahead of the first eb run
+		iInit := strings.Index(got, ebInit)
+		iFirstEb := strings.Index(got, ebRun)
+		if iInit < 0 || iFirstEb < 0 || iInit > iFirstEb {
+			t.Errorf("expected %q before the first eb invocation, got:\n%s", ebInit, got)
+		}
+
+		// exit status recaptured once per easystack
+		if n := strings.Count(got, ebRcCap); n != len(opts.Files) {
+			t.Errorf("expected %q once per easystack (%d), got %d", ebRcCap, len(opts.Files), n)
+		}
+		if n := strings.Count(got, failBr); n != len(opts.Files) {
+			t.Errorf("expected failure branch %q once per easystack (%d), got %d", failBr, len(opts.Files), n)
+		}
+
+		// exactly one guard, wrapping the plain crtar invocation
+		if n := strings.Count(got, tarGuard); n != 1 {
+			t.Errorf("expected exactly one tarball guard %q, got %d", tarGuard, n)
+		}
+		if want := tarGuard + "\n    crtar ${ARGS}\nfi"; !strings.Contains(got, want) {
+			t.Errorf("expected plain crtar wrapped by the eb_rc guard (%q), got:\n%s", want, got)
+		}
+
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("publish path", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+		data.Publish = true
+		data.RGW = true
+		data.RGWBucket = "sam-archives"
+
+		got, outFile := renderToDisk(t, data)
+
+		iGuard := strings.Index(got, tarGuard)
+		if iGuard < 0 {
+			t.Fatalf("expected the publish block guarded by %q, got:\n%s", tarGuard, got)
+		}
+		iFi := strings.Index(got[iGuard:], "\nfi")
+		if iFi < 0 {
+			t.Fatalf("tarball guard %q has no closing fi, got:\n%s", tarGuard, got)
+		}
+		block := got[iGuard : iGuard+iFi]
+		for _, want := range []string{
+			`tb="$(crtar ${ARGS}`,
+			`rgw object put sam-archives "$bn" "$tb"`,
+			`rgw object put sam-archives "$bn.sha256"`,
+		} {
+			if !strings.Contains(block, want) {
+				t.Errorf("expected %q inside the eb_rc guard, got:\n%s", want, got)
+			}
+		}
+
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("no easystacks keeps tar step unreachable", func(t *testing.T) {
+		opts := optsForTest()
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+		data.Publish = false
+
+		got, outFile := renderToDisk(t, data)
+
+		if strings.Contains(got, ebRun) {
+			t.Errorf("no easystacks: rendered output should contain no eb run, got:\n%s", got)
+		}
+		if !strings.Contains(got, ebInit) {
+			t.Errorf("no easystacks: keep the fail-safe %q so the guard (eb_rc stays 1) blocks the tar step, got:\n%s", ebInit, got)
+		}
+		if !strings.Contains(got, tarGuard) {
+			t.Errorf("no easystacks: tar step must stay guarded by %q, got:\n%s", tarGuard, got)
+		}
+
+		assertBashSyntax(t, outFile)
+	})
+}
+
 func TestValidatePublish_RequiresRGWBucket(t *testing.T) {
 	noBucket := &config.File{}
 	if err := validatePublish(noBucket); err == nil {
