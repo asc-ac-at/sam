@@ -17,6 +17,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	buildExample = `
+	# build for a zen4/h100 arch/accel combination using a specific slurm partition, using the most recently changed files in a gitlab merge request
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-mr-id <N>
+
+	# build the most recently changed file(s) from a git branch
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-branch <remote-branch>
+
+	# build using a specific file from a git commit
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-commit <sha> --files easystack/2025.06/some-file.yaml
+
+	# build and publish the tarball to rados-gateway
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-mr-id <N> --publish
+
+	# change the ownership of the files in the created tarball
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-mr-id <N> --owner <some-user> --group <some-group>
+	`
+)
+
 // validatePublish enforces the publish invariant: uploading the tarball to
 // the radosgw bucket requires the bucket (and optionally endpoint) configured.
 func validatePublish(cfg *config.File) error {
@@ -43,6 +62,7 @@ func NewCommand(opts *shared.Options, logger *slog.Logger) *cobra.Command {
 Typically you run this command when you want to publish software to a
 cvmfs repository. The configuration of the build environment is specified
 by the container tool e.g: samctr.`,
+		Example: buildExample,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Name == "" {
 				return errors.New("--name is required")
