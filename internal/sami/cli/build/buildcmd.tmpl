@@ -48,6 +48,7 @@ fi
 
 {{- end }}
 
+eb_rc=1
 {{- $logdir := .Logdir }}
 {{- range .Easystacks }}
 ml load EESSI-extend
@@ -61,7 +62,8 @@ if [ ! -f ${stack_file} ]; then
 fi
 
 eb --parallel="${EB_PARALLEL:-$(nproc)}" -r --easystack ${stack_file}
-if [[ "$?" -ne 0 ]]; then
+eb_rc="$?"
+if [[ "$eb_rc" -ne 0 ]]; then
     printf "ERR - easybuild failed for ${stack_file}\n"
     # salvage the container /tmp (build dir, eb logs, shell command outputs) for post-mortem
     cp -a /tmp/ {{ $logdir }}/ctr-tmp
@@ -80,6 +82,7 @@ ARGS="${ARGS} --owner={{ .Owner }}"
 ARGS="${ARGS} --group={{ .Group }}"
 {{- end }}
 
+if [[ "$eb_rc" == 0 ]]; then
 {{- if .Publish}}
     # creds provisioned by the sbatch wrapper via APPTAINERENV_ forwarding
     # (no creds file bind-mounted into the container)
@@ -95,3 +98,4 @@ ARGS="${ARGS} --group={{ .Group }}"
 {{- else }}
     crtar ${ARGS}
 {{- end }}
+fi
