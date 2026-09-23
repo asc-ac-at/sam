@@ -43,7 +43,7 @@ type Options struct {
 	Owner            string   `flag:"owner"`
 	Group            string   `flag:"group"`
 	SbatchFlags      []string `flag:"sbatch-flags"`
-	EasyBuildFlags   []string `flag:"easybuild-flags"`
+	EasyBuildFlags   []string `flag:"eb-flags"`
 }
 
 func NewOptions() *Options {
