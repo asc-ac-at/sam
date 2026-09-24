@@ -6,11 +6,22 @@ package samctr
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 	"strings"
 
 	isamctr "github.com/asc-ac-at/sam/internal/samctr"
 	"github.com/spf13/cobra"
+)
+
+var (
+	shellExample = `
+	# run an apptainer shell with a clean environment and the default config for samctr
+	samctr shell --cleanenv
+
+	# resume from a previously dumped ctr-tmp directory
+	samctr shell --resume /path/to/ctr-tmp
+	`
 )
 
 func ApptainerShellArg(rs *RuntimeState) string {
@@ -23,7 +34,7 @@ func ApptainerShellArg(rs *RuntimeState) string {
 
 	bindmounts := isamctr.BindMountsApptainerFmt(rs.AllBindMounts)
 	extraOpts := strings.Join(rs.ApptainerCmdOpts, " ")
-	arg := fmt.Sprintf(`'apptainer shell %s %s %s %s'`, fusemounts, bindmounts, extraOpts, rs.ContainerSif)
+	arg := fmt.Sprintf(`apptainer shell %s %s %s %s`, fusemounts, bindmounts, extraOpts, rs.ContainerSif)
 	slog.Debug("apptainer shell arg", "arg", arg)
 	return arg
 }
@@ -35,14 +46,19 @@ var shellCmd = &cobra.Command{
 	Long: `Configure Apptainer shell.
 
 This will prepare a command to execute Apptainer shell with the desired configuration.`,
+	Example: shellExample,
 	PreRunE: PrepareContainerPreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 
+		shellArg := ApptainerShellArg(Runtime)
 		if ToStdout {
-			fmt.Printf("/bin/sh -c %s\n", ApptainerShellArg(Runtime))
+			fmt.Printf("/bin/sh -c %s\n", shellArg)
 			return
 		} else {
-			RunSystemShell(Runtime, ApptainerShellArg)
+			cfg := newSystemShell(Runtime, shellArg)
+			if err := cfg.Run(); err != nil {
+				log.Fatalf(`/bin/sh -c %s failed, %q`, shellArg, err)
+			}
 		}
 	},
 }

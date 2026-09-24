@@ -22,8 +22,10 @@ var defaultName = "unnamed"
 var defaultRepo = "software.asc.ac.at"
 
 // config holds the resolved command-line options. archSubdir is read from
-// --arch-subdir (or the deprecated -cpuArchSubdir alias). accelSubdir is
-// accepted via --accel-subdir but is not yet applied to the search path.
+// --arch-subdir (or the deprecated -cpuArchSubdir alias). accelSubdir is an
+// optional EESSI-style accelerator subdir (e.g. accel/nvidia/cc100); when
+// set, the search path covers <archSubdir>/accel/... in addition to the
+// arch subdir itself, and the accel part appears in the tarball name.
 type config struct {
 	eessiVersion string
 	archSubdir   string
@@ -33,6 +35,8 @@ type config struct {
 	repo         string
 	version      bool
 	verbose      bool
+	owner        string
+	group        string
 }
 
 // parseFlags parses crtar's command line. The deprecated -cpuArchSubdir
@@ -46,12 +50,14 @@ func parseFlags(args []string, out io.Writer) (*config, error) {
 	fs.StringVar(&c.eessiVersion, "EESSI-version", defaultSWSVersion, "Version of the (EEESI based) software stack")
 	fs.StringVar(&c.archSubdir, "arch-subdir", defaultArchSubdir, "Architecture subdirectory to search (e.g. x86_64/amd/zen4)")
 	fs.StringVar(&c.archSubdir, "cpuArchSubdir", defaultArchSubdir, "Deprecated alias for --arch-subdir")
-	fs.StringVar(&c.accelSubdir, "accel-subdir", "", "Accelerator subdirectory (e.g. accel/nvidia/cc90); accepted but not yet applied to the search path")
+	fs.StringVar(&c.accelSubdir, "accel-subdir", "", "Accelerator subdirectory relative to the arch dir (e.g. accel/nvidia/cc100); empty for CPU-only builds")
 	fs.StringVar(&c.name, "name", defaultName, "Name of the tarball being created")
 	fs.StringVar(&c.outputDir, "outputDir", "/opt/adm/sam-archives", "Output directory to save tarball")
 	fs.StringVar(&c.repo, "repo", defaultRepo, "CVMFS repository for which the software was built")
 	fs.BoolVar(&c.version, "version", false, "print version info")
 	fs.BoolVar(&c.verbose, "verbose", false, "enable debug logging")
+	fs.StringVar(&c.owner, "owner", "", "Force NAME as owner for added files. Absent uid, lookup on host. See man tar.")
+	fs.StringVar(&c.group, "group", "", "Force NAME as group for added files. Absent gid, lookup on host. See man tar.")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -87,17 +93,13 @@ func main() {
 	if cfg.verbose {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
-	if cfg.accelSubdir != "" {
-		slog.Warn("note: --accel-subdir is not yet applied to the search path", "value", cfg.accelSubdir)
-	}
-
-	listFile, err := crtar.MakeListFile(cfg.repo, cfg.eessiVersion, cfg.archSubdir)
+	rootsFile, ancFile, err := crtar.MakeListFile(cfg.repo, cfg.eessiVersion, cfg.archSubdir, cfg.accelSubdir)
 	if err != nil {
 		slog.Error("making list file", "error", err)
 		os.Exit(1)
 	}
 
-	tarball, err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.name, cfg.outputDir, listFile)
+	tarball, err := crtar.ExecTar(cfg.repo, cfg.archSubdir, cfg.accelSubdir, cfg.name, cfg.outputDir, rootsFile, ancFile, cfg.owner, cfg.group)
 	if err != nil {
 		slog.Error("execTar failed", "error", err)
 		os.Exit(1)

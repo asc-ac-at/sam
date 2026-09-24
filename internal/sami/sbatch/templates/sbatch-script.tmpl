@@ -2,5 +2,44 @@
 
 {{ .Headers }}
 
-samctr exec \
+# site's extra toolchains: EESSI_SITE_TOP_LEVEL_TOOLCHAINS_* come from
+# the node environment propagated into the job.
+# Re-export with the APPTAINERENV_ prefix so apptainer forwards them even
+# under --cleanenv (inner side sees the unprefixed names). No-op when unset.
+for _eessi_tc_var in "${!EESSI_SITE_TOP_LEVEL_TOOLCHAINS_@}"; do
+    export "APPTAINERENV_${_eessi_tc_var}=${!_eessi_tc_var}"
+done
+unset _eessi_tc_var
+
+{{ if .Publish }}# publish: provision rgw/S3 credentials for the containerized build_cmd.sh.
+# The creds file is sourced on the compute node (NFS home is visible there)
+# and the AWS chain is re-exported with the APPTAINERENV_ prefix, which
+# apptainer forwards even under --cleanenv (inner side sees plain AWS_*).
+rgw_creds="${HOME}/.config/rgw/sam.env"
+if [ ! -f "${rgw_creds}" ]; then
+    echo "ERR - publish requested but rgw credentials file not found: ${rgw_creds}" >&2
+    exit 1
+fi
+set -a
+. "${rgw_creds}"
+set +a
+export APPTAINERENV_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+[ -n "${AWS_SESSION_TOKEN}" ] && export APPTAINERENV_AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
+[ -n "${AWS_REGION}" ] && export APPTAINERENV_AWS_REGION="${AWS_REGION}"
+[ -n "${AWS_ENDPOINT_URL}" ] && export APPTAINERENV_AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL}"
+# CA bundle gets translated, not passed through: the wrapper knows
+# $HOME/.config/rgw is bound to /opt/rgw in the container, so the cert
+# convention is "tls-ca-bundle.pem in the creds dir" and the container
+# always sees the /opt/rgw path, regardless of the host-side value.
+_rgw_cert="${HOME}/.config/rgw/tls-ca-bundle.pem"
+if [ -f "${_rgw_cert}" ]; then
+    export APPTAINERENV_AWS_CA_BUNDLE="/opt/rgw/tls-ca-bundle.pem"
+fi
+unset _rgw_cert
+
+export APPTAINERENV_EB_PARALLEL="${EB_PARALLEL:-${SLURM_CPUS_PER_TASK}}"
+
+{{ end }}samctr exec \
+    --cleanenv \
     -- /bin/sh <{{ .BuildCmdPath }}

@@ -39,6 +39,11 @@ type Options struct {
 	BuildLogBasePath string   `flag:"log-basepath" default:"/opt/adm/asc-software-stack"`
 	Verbose          bool     `flag:"verbose" default:"false"`
 	Files            []string `flag:"files"`
+	BuildEnv         []string `flag:"build-env"`
+	Owner            string   `flag:"owner"`
+	Group            string   `flag:"group"`
+	SbatchFlags      []string `flag:"sbatch-flags"`
+	EasyBuildFlags   []string `flag:"eb-flags"`
 }
 
 func NewOptions() *Options {
@@ -62,5 +67,10 @@ func RegisterFlags(cmd *cobra.Command, opts *Options) *Options {
 	cmd.PersistentFlags().StringVar(&opts.BuildLogBasePath, "log-basepath", opts.BuildLogBasePath, "Sets the base of the build log directory tree")
 	cmd.PersistentFlags().BoolVar(&opts.Verbose, "verbose", opts.Verbose, "Enable verbose logging")
 	cmd.PersistentFlags().StringArrayVarP(&opts.Files, "files", "f", opts.Files, "Easystack files to pass to easybuild. Overrides any changed files in repo.")
+	cmd.PersistentFlags().StringArrayVar(&opts.BuildEnv, "build-env", opts.BuildEnv, "Extra KEY=VALUE exported in build_cmd.sh (repeatable). Rendered verbatim; takes precedence over the hermetic unset of EESSI_* vars.")
+	cmd.PersistentFlags().StringVar(&opts.Owner, "owner", opts.Owner, "Force NAME as owner for added files. Absent uid, lookup on host. See man tar.")
+	cmd.PersistentFlags().StringVar(&opts.Group, "group", opts.Group, "Force NAME as group for added files. Absent gid, lookup on host. See man tar.")
+	cmd.PersistentFlags().StringArrayVar(&opts.SbatchFlags, "sbatch-flags", opts.SbatchFlags, "Extra flag passed verbatim to the sbatch invocation (repeatable), e.g. --sbatch-flags=--dependency=afterok:<jobid>")
+	cmd.PersistentFlags().StringArrayVar(&opts.EasyBuildFlags, "eb-flags", opts.EasyBuildFlags, "Extra flags passed verbatim to the build_cmd.sh, e.g.: --eb-flags='--rebuild'")
 	return opts
 }

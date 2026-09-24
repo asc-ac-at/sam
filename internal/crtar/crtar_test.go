@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -196,6 +198,13 @@ func uniqueRepo() string {
 	return fmt.Sprintf("crtar-test-%x", b)
 }
 
+// emptyAncestorList returns a valid-but-empty ancestors list for tests whose
+// assertions live entirely in the roots side of ExecTar's two passes.
+func emptyAncestorList(t *testing.T, outdir string) *os.File {
+	t.Helper()
+	return writeListFile(t, outdir)
+}
+
 // writeListFile writes each entry on its own line to a fresh temp file in
 // outdir and returns the open *os.File, mirroring MakeListFile's output.
 func writeListFile(t *testing.T, outdir string, entries ...string) *os.File {
@@ -217,6 +226,111 @@ func writeListFile(t *testing.T, outdir string, entries ...string) *os.File {
 		t.Fatal(err)
 	}
 	return lf
+}
+
+// readTarHeaders returns the headers of all members of a .tar.gz archive.
+func readTarHeaders(t *testing.T, archivePath string) []*tar.Header {
+	t.Helper()
+	f, err := os.Open(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	var hdrs []*tar.Header
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		hdrs = append(hdrs, hdr)
+	}
+	return hdrs
+}
+
+// writeModuleFile creates a single fake module file under the given repo's
+// overlay tree and returns its path.
+func writeModuleFile(t *testing.T, repo string) string {
+	t.Helper()
+	modFile := filepath.Join(
+		versionsDir(repo), "2025.06", "software", "linux", "x86_64",
+		"amd", "zen4", "modules", "all", "Go", "1.25.7.lua")
+	if err := os.MkdirAll(filepath.Dir(modFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(modFile, []byte("module load Go"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return modFile
+}
+
+// TestExecTar_OwnerGroup asserts the post-hoc ownership path: packing with
+// owner="90116" and group="200300" must stamp every tarball member with the
+// forced numeric uid/gid. The cvmfs ingestion service reads these headers
+// verbatim, so this is the contract that produces a gaussian-owned tree.
+func TestExecTar_OwnerGroup(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	modFile := writeModuleFile(t, repo)
+
+	outdir := t.TempDir()
+	listFile := writeListFile(t, outdir, modFile)
+
+	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile, emptyAncestorList(t, outdir), "90116", "200300")
+	if err != nil {
+		t.Fatalf("ExecTar: %v", err)
+	}
+
+	hdrs := readTarHeaders(t, tb)
+	if len(hdrs) == 0 {
+		t.Fatal("tarball is empty")
+	}
+	for _, hdr := range hdrs {
+		if hdr.Uid != 90116 || hdr.Gid != 200300 {
+			t.Errorf("member %q: got uid:gid %d:%d, want 90116:200300",
+				hdr.Name, hdr.Uid, hdr.Gid)
+		}
+	}
+}
+
+// TestExecTar_OwnerOnly asserts that forcing only the owner stamps the uid
+// while the gid is still taken from the file on disk.
+func TestExecTar_OwnerOnly(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	modFile := writeModuleFile(t, repo)
+	info, err := os.Stat(modFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantGid := int(info.Sys().(*syscall.Stat_t).Gid)
+
+	outdir := t.TempDir()
+	listFile := writeListFile(t, outdir, modFile)
+
+	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile, emptyAncestorList(t, outdir), "90116", "")
+	if err != nil {
+		t.Fatalf("ExecTar: %v", err)
+	}
+
+	for _, hdr := range readTarHeaders(t, tb) {
+		if hdr.Uid != 90116 {
+			t.Errorf("member %q: got uid %d, want 90116", hdr.Name, hdr.Uid)
+		}
+		if hdr.Gid != wantGid {
+			t.Errorf("member %q: got gid %d, want on-disk gid %d", hdr.Name, hdr.Gid, wantGid)
+		}
+	}
 }
 
 // readTarNames lists the member names of a .tar.gz archive.
@@ -268,7 +382,7 @@ func TestExecTar_CreatesTarball(t *testing.T) {
 	listFile := writeListFile(t, outdir, modFile)
 
 	name, cpu := "sami", "amd/zen4"
-	tb, err := ExecTar(repo, cpu, name, outdir, listFile)
+	tb, err := ExecTar(repo, cpu, "", name, outdir, listFile, emptyAncestorList(t, outdir), "", "")
 	if err != nil {
 		t.Fatalf("ExecTar: %v", err)
 	}
@@ -318,7 +432,7 @@ func TestExecTar_FailsOnMissingFile(t *testing.T) {
 	missing := filepath.Join(versionsDir(repo), "2025.06", "nope.lua")
 	listFile := writeListFile(t, outdir, missing)
 
-	tb, err := ExecTar(repo, "amd/zen4", "sami", outdir, listFile)
+	tb, err := ExecTar(repo, "amd/zen4", "", "sami", outdir, listFile, emptyAncestorList(t, outdir), "", "")
 	if err == nil {
 		t.Fatal("expected ExecTar to fail for a missing listed file")
 	}
@@ -344,5 +458,148 @@ func TestAcquireLockfileAlreadyPresent(t *testing.T) {
 		t.Fatal("expected lockfile-present error")
 	} else if !strings.Contains(err.Error(), "already present") {
 		t.Errorf("error should mention the lockfile, got: %v", err)
+	}
+}
+
+// TestMakeListFile_AncestorsChain: MakeListFile must emit a second list
+// carrying the ancestors of every root, deduped, relative to the versions/
+// workdir — cure-contract r2 from debug/repro-eoverflow/ (2026-09-11).
+func TestMakeListFile_AncestorsChain(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	cpuRoot := archDir(repo, "2023.06", testArchSubdir)
+	mkModuleAndSoftware(t, cpuRoot, "Gaussian", "16.C.01-AVX2")
+
+	lf, ancF, err := MakeListFile(repo, "2023.06", testArchSubdir, "")
+	if err != nil {
+		t.Fatalf("MakeListFile: %v", err)
+	}
+	defer os.Remove(lf.Name())
+	defer os.Remove(ancF.Name())
+
+	ancestors := readListFile(t, ancF)
+	prefix := "2023.06/software/linux/x86_64/" + testArchSubdir[len("x86_64/"):] + "/"
+	wants := []string{
+		"2023.06",
+		"2023.06/software",
+		"2023.06/software/linux",
+		"2023.06/software/linux/x86_64",
+		"2023.06/software/linux/x86_64/amd",
+		prefix + "modules",
+		prefix + "modules/all",
+		prefix + "modules/all/Gaussian",
+		prefix + "software",
+		prefix + "software/Gaussian",
+	}
+	have := map[string]bool{}
+	for _, a := range ancestors {
+		have[a] = true
+	}
+	for _, w := range wants {
+		if !have[w] {
+			t.Errorf("ancestors list missing %q; got:\n%s", w, strings.Join(ancestors, "\n"))
+		}
+	}
+	// dedup: shared structure appears once although two roots
+	if len(ancestors) != len(have) {
+		t.Errorf("duplicates in ancestors list: %d lines, %d unique", len(ancestors), len(have))
+	}
+	// and the roots themselves must NOT be members of the ancestors list
+	for _, a := range ancestors {
+		if strings.HasSuffix(a, "Gaussian/16.C.01-AVX2") {
+			t.Errorf("root path leaked into ancestors list: %q", a)
+		}
+	}
+}
+
+// TestExecTar_AncestorsOnce: the two-pass ExecTar appends ancestor members
+// exactly once, forced to the package ownership, without in-archive dups
+// (the r4 shape that asserts catalog_rw.cc:165 at ingest).
+func TestExecTar_AncestorsOnce(t *testing.T) {
+	repo := uniqueRepo()
+	t.Cleanup(func() { os.RemoveAll(filepath.Join("/tmp", repo)) })
+
+	cpuRoot := archDir(repo, "2025.06", "x86_64/amd/zen4")
+	mkModuleAndSoftware(t, cpuRoot, "Stata", "19")
+	modFile := filepath.Join(cpuRoot, "modules", "all", "Stata", "19.lua")
+	pkgdir := filepath.Join(cpuRoot, "software", "Stata", "19")
+	if err := os.Chmod(pkgdir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// a payload file deep under the root: this is what made rc19 mint the
+	// sentinel at publish time — parents must stream ahead of descendants,
+	// else the ingest-side itemizer creates them on demand as (uid_t)-1
+	payload := filepath.Join(pkgdir, "bin", "stata-se")
+	if err := os.MkdirAll(filepath.Dir(payload), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(payload, []byte("#!/bin/sh\necho stata\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	outdir := t.TempDir()
+	rel := func(p string) string {
+		return strings.TrimPrefix(p, versionsDir(repo)+"/")
+	}
+	roots := writeListFile(t, outdir, rel(modFile), rel(pkgdir))
+	ancestors := writeListFile(t, outdir,
+		"2025.06", "2025.06/software", "2025.06/software/linux",
+		"2025.06/software/linux/x86_64", "2025.06/software/linux/x86_64/amd",
+		"2025.06/software/linux/x86_64/amd/zen4",
+		"2025.06/software/linux/x86_64/amd/zen4/software",
+		"2025.06/software/linux/x86_64/amd/zen4/software/Stata",
+		"2025.06/software/linux/x86_64/amd/zen4/modules",
+		"2025.06/software/linux/x86_64/amd/zen4/modules/all",
+		"2025.06/software/linux/x86_64/amd/zen4/modules/all/Stata",
+	)
+
+	tb, err := ExecTar(repo, "amd/zen4", "", "stata", outdir, roots, ancestors, "90063", "200325")
+	if err != nil {
+		t.Fatalf("ExecTar: %v", err)
+	}
+
+	hdrs := readTarHeaders(t, tb)
+	counts := map[string]int{}
+	for _, h := range hdrs {
+		counts[strings.TrimSuffix(h.Name, "/")]++
+		if h.Uid != 90063 || h.Gid != 200325 {
+			t.Errorf("member %s not forced to 90063:200325 (got %d:%d)", h.Name, h.Uid, h.Gid)
+		}
+	}
+	for _, w := range []string{
+		"2025.06/software/linux/x86_64/amd/zen4/software/Stata",
+		"2025.06/software/linux/x86_64/amd/zen4/modules/all/Stata",
+		"2025.06",
+	} {
+		if counts[w] != 1 {
+			t.Errorf("ancestor %q appears %d times in archive, want exactly 1", w, counts[w])
+		}
+	}
+	for name, n := range counts {
+		if n > 1 {
+			t.Errorf("in-archive duplicate for %q (%d) — ingest AddEntry assert shape", name, n)
+		}
+	}
+
+	// ORDERING CONTRACT (2026-09-11 Gaussian replay defect): every ancestor
+	// dir must precede every descendant member. The ingest itemizer
+	// synthesizes an absent parent on demand when a payload file arrives,
+	// stamps it (uid_t)-1, then silently drops the real dir member that
+	// shows up later — the sentinel row stands.
+	firstIdx := map[string]int{}
+	for i, h := range hdrs {
+		name := strings.TrimSuffix(h.Name, "/")
+		if _, ok := firstIdx[name]; !ok {
+			firstIdx[name] = i
+		}
+	}
+	for name, i := range firstIdx {
+		for anc := path.Dir(name); anc != "." && anc != ""; anc = path.Dir(anc) {
+			if j, ok := firstIdx[anc]; ok && j > i {
+				t.Errorf("ancestor %q (member %d) streams AFTER descendant %q (member %d) — sentinel mint shape",
+					anc, j, name, i)
+			}
+		}
 	}
 }

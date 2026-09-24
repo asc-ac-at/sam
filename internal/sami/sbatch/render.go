@@ -47,6 +47,13 @@ type ScriptData struct {
 	// BuildCmdPath is the path to the rendered build-command script (e.g.
 	// $LOGDIR/build_cmd.sh), redirect-fed into the container's shell.
 	BuildCmdPath string
+	// Publish, when true, renders the rgw credential forwarding block: the
+	// (host-visible) sam.env file is sourced on the compute node and the AWS
+	// credential chain is re-exported with the APPTAINERENV_ prefix so the
+	// container receives it even under apptainer --cleanenv. Inside the
+	// container the variables appear unprefixed (AWS_*); secrets are never
+	// written into the job script itself.
+	Publish bool
 }
 
 // RenderHeaders renders the #SBATCH directive block for partition. The whole

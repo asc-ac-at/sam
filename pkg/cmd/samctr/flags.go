@@ -20,6 +20,7 @@ var (
 	ToStdout              bool
 	Verbose               bool
 	WriteableRepositories []string
+	CleanEnv              bool
 )
 
 const DefaultHostInjections = "/opt/eessi"
@@ -36,4 +37,5 @@ func registerFlags(root *cobra.Command) {
 	root.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "Enable debug logging")
 	root.PersistentFlags().StringSliceVarP(&WriteableRepositories, "writeable-repositories", "w", []string{}, "CVMFS repository mouned with writeable overlay filesystem")
 	root.PersistentFlags().StringVar(&FuseCmdRW, "fuse", "fuse-overlayfs", "Fuse implementation to use for overlay (writeable) filesystem")
+	root.PersistentFlags().BoolVar(&CleanEnv, "cleanenv", false, "Pass --cleanenv to container (avoids inheriting host environment)")
 }

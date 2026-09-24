@@ -25,6 +25,11 @@ type Client struct {
 	S3Client *s3.Client
 }
 
+// defaultRegion is used when the AWS environment chain provides no region:
+// any non-empty string makes the SDK sign requests, and RGW ignores the
+// value for custom endpoints.
+const defaultRegion = "us-east-1"
+
 // New loads the default AWS configuration and returns a Client backed by an
 // S3 client. Endpoint and credentials are resolved from the environment (for
 // example AWS_ENDPOINT_URL, AWS_REGION, and the standard credential chain).
@@ -34,6 +39,14 @@ func New(ctx context.Context) (*Client, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("loading AWS config: %w", err)
+	}
+	// RGW speaks SigV4 but assigns no meaning to regions; the AWS SDK
+	// still refuses to craft S3 requests without one ("A region must be
+	// set when sending requests to S3"). Provide a placeholder when the
+	// environment chain resolved none -- commonly the case on compute
+	// nodes running with --cleanenv, where nothing sources AWS_REGION.
+	if cfg.Region == "" {
+		cfg.Region = defaultRegion
 	}
 	return &Client{S3Client: s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
