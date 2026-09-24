@@ -14,6 +14,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	shellExample = `
+	# run an apptainer shell with a clean environment and the default config for samctr
+	samctr shell --cleanenv
+
+	# resume from a previously dumped ctr-tmp directory
+	samctr shell --resume /path/to/ctr-tmp
+	`
+)
+
 func ApptainerShellArg(rs *RuntimeState) string {
 	// We're going to construct a big 'ol string to pass to shell
 
@@ -36,6 +46,7 @@ var shellCmd = &cobra.Command{
 	Long: `Configure Apptainer shell.
 
 This will prepare a command to execute Apptainer shell with the desired configuration.`,
+	Example: shellExample,
 	PreRunE: PrepareContainerPreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 

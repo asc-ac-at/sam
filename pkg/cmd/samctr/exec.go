@@ -15,6 +15,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	execExample = `
+	# run a program inside the container
+	samctr exec -- ls /cvmfs
+
+	# run a program inside an existing container (resume from tmpdir)
+	samctr exec --resume /path/to/previous/build/ctr-tmp -- find /cvmfs -name "my-software"
+
+	# run an arbitrary "build_cmd" script
+	cat >build_cmd.sh <<EOF
+	#!/bin/sh
+
+	export EESSI_SITE_INSTALL_PREFIX=/cvmfs/software.asc.ac.at
+	source /cvmfs/software.eessi.io/versions/2025.06/init/lmod/sh
+	module load EESSI-extend
+	eb -r <some-easyconfig>.eb
+	EOF
+	samctr exec -- /bin/sh <build_cmd.sh
+`
+)
+
 func ApptainerExecArg(rs *RuntimeState) string {
 
 	fusemounts := ""
@@ -40,27 +61,8 @@ var execCmd = &cobra.Command{
 This will set up a call to "apptainer exec" using values provided by the
 config file and/or inputs using the cli flags. A typical use case for exec
 is to run a software build from the context of at slurm job.
-
-Examples:
-	$ samctr exec -- ls /cvmfs
-	
-	$ cat hello_world.py | samctr exec -- python3
-
-	$ samctr exec -- /bin/sh -<build_cmd.sh
-
-	$ cat >build_go_1250.sh <<EOF
-	#!/bin/sh
-
-	export EESSI_PROJECT_INSTALL=/cvmfs/software.asc.ac.at
-	source /cvmfs/software.eessi.io/versions/2023.06/init/lmod/bash
-	source /cvmfs/software.eessi.io/versions/2023.06/init/bash
-	module load EESSI-extend
-	eb -r Go-1.25.0.eb
-	EOF
-	$ samctr exec -- /bin/sh <build_go_1250.sh
-
-
 `,
+	Example: execExample,
 	PreRunE: PrepareContainerPreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 		var argsAfterDash []string
