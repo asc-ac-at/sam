@@ -1,0 +1,21 @@
+name: test
+
+# mirror of .gitlab-ci.yml for the GitHub copy of this repo
+on: [push, pull_request]
+
+env:
+  GOFLAGS: "-mod=mod"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - run: go vet ./...
+      - run: go test -v -race ./...
