@@ -8,6 +8,7 @@ import (
 
 	"github.com/asc-ac-at/sam/internal/sami/cli/shared"
 	"github.com/asc-ac-at/sam/internal/sami/config"
+	"github.com/asc-ac-at/sam/internal/sami/creds"
 	"github.com/asc-ac-at/sam/internal/sami/logging/buildlog"
 	"github.com/asc-ac-at/sam/internal/sami/sbatch"
 )
@@ -48,6 +49,25 @@ func runSlurmBackend(opts *shared.Options, blPath *buildlog.BuildLogPaths, logge
 			return nil
 		}
 		return fmt.Errorf("loading sami config: %w", err)
+	}
+
+	// keks lane (backend: keks): resolve the rgw credential pair HERE, on
+	// the submit host, so a dead papiere session refuses the submit
+	// immediately instead of aborting deep inside the job (the ladder's
+	// top rung; env lane keeps the file-sourcing fallback in the script).
+	// FillMissingEnv keeps the operator's prepared env winning.
+	if publish {
+		keks, err := cfg.RGW.Credentials.KeksBackend()
+		if err != nil {
+			return err
+		}
+		if keks {
+			c := cfg.RGW.Credentials
+			if err := creds.FillMissingEnv(creds.KeksResolver{}, c.AccessKeyRef, c.SecretKeyRef); err != nil {
+				return fmt.Errorf("keks backend: %w", err)
+			}
+			logger.Debug("rgw credentials resolved via keks at submit time")
+		}
 	}
 
 	var headers bytes.Buffer

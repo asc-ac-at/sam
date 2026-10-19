@@ -126,6 +126,139 @@ func TestRunBackend_Slurm_SubmitsComposedScript(t *testing.T) {
 	}
 }
 
+// testKeksConfig extends the minimal config with the keks lane selected.
+const testKeksConfig = testSbatchConfig + `
+rgw:
+  bucket: sam-archives
+  credentials:
+    backend: keks
+`
+
+// writeUserConfig stages a user-level sami config and points the loader at it
+// (mirrors the render-path setup above; shared by the keks-lane tests).
+func writeUserConfig(t *testing.T, content string) {
+	t.Helper()
+	userCfg := filepath.Join(t.TempDir(), "sami", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(userCfg), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(userCfg, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", filepath.Dir(filepath.Dir(userCfg)))
+}
+
+// stubKeks installs a fake keks binary on PATH (sh script).
+func stubKeks(t *testing.T, body string) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "keks")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestRunSlurmBackend_KeksLaneResolvesAtSubmit(t *testing.T) {
+	writeUserConfig(t, testKeksConfig)
+	withMissingSystemConfig(t)
+	stubKeks(t, `echo "VALUE-$2"`)
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+
+	opts := shared.NewOptions()
+	opts.BuildBackend = string(shared.BackendSlurm)
+	opts.Partition = "testpart"
+	sub := &fakeSubmitter{jobID: "4242"}
+
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub, true); err != nil {
+		t.Fatalf("keks lane submit: %v", err)
+	}
+	assertEnv := func(name, frag string) {
+		t.Helper()
+		v := os.Getenv(name)
+		if !strings.Contains(v, frag) {
+			t.Errorf("%s = %q, want value resolved from the pair ref (%q)", name, v, frag)
+		}
+	}
+	assertEnv("AWS_ACCESS_KEY_ID", "access_key")
+	assertEnv("AWS_SECRET_ACCESS_KEY", "secret_key")
+	if len(sub.scripts) != 1 {
+		t.Fatalf("expected 1 submission, got %d", len(sub.scripts))
+	}
+	// the script must still carry the template's presence gate + file fallback
+	s := string(sub.scripts[0])
+	if !strings.Contains(s, "elif [ -f \"${rgw_creds}\" ]") {
+		t.Errorf("script lost the env-lane fallback\ngot:\n%s", s)
+	}
+}
+
+func TestRunSlurmBackend_KeksLaneEnvWins(t *testing.T) {
+	writeUserConfig(t, testKeksConfig)
+	withMissingSystemConfig(t)
+	stubKeks(t, `exit 1`) // would fail if consulted: prepared env must win
+	t.Setenv("AWS_ACCESS_KEY_ID", "prepared-ak")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "prepared-sk")
+
+	opts := shared.NewOptions()
+	opts.BuildBackend = string(shared.BackendSlurm)
+	opts.Partition = "testpart"
+	sub := &fakeSubmitter{jobID: "4242"}
+
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub, true); err != nil {
+		t.Fatalf("keks lane submit with prepared env: %v", err)
+	}
+	if got := os.Getenv("AWS_ACCESS_KEY_ID"); got != "prepared-ak" {
+		t.Errorf("AWS_ACCESS_KEY_ID = %q, want the prepared value untouched", got)
+	}
+	if len(sub.scripts) != 1 {
+		t.Fatalf("expected 1 submission, got %d", len(sub.scripts))
+	}
+}
+
+func TestRunSlurmBackend_KeksLaneDeadSessionRefusesEarly(t *testing.T) {
+	writeUserConfig(t, testKeksConfig)
+	withMissingSystemConfig(t)
+	stubKeks(t, `echo "no vault token (VAULT_TOKEN / ~/.vault-token) - run \"papiere bitte\"" >&2
+exit 1`)
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+
+	opts := shared.NewOptions()
+	opts.BuildBackend = string(shared.BackendSlurm)
+	opts.Partition = "testpart"
+	sub := &fakeSubmitter{jobID: "4242"}
+
+	err := runBackend(opts, testLogPaths(), newTestLogger(), sub, true)
+	if err == nil {
+		t.Fatal("expected keks-lane refusal, got nil")
+	}
+	if !strings.Contains(err.Error(), `run "papiere bitte"`) {
+		t.Errorf("refusal lost keks' login hint: %v", err)
+	}
+	if len(sub.scripts) != 0 {
+		t.Error("submit must not happen once the keks lane refused")
+	}
+}
+
+func TestRunSlurmBackend_EnvLaneNeverConsultsKeks(t *testing.T) {
+	writeUserConfig(t, testSbatchConfig) // no rgw section: default env lane
+	withMissingSystemConfig(t)
+	stubKeks(t, `exit 1`)
+
+	opts := shared.NewOptions()
+	opts.BuildBackend = string(shared.BackendSlurm)
+	opts.Partition = "testpart"
+	sub := &fakeSubmitter{jobID: "4242"}
+
+	if err := runBackend(opts, testLogPaths(), newTestLogger(), sub, true); err != nil {
+		t.Fatalf("env lane: %v", err)
+	}
+	if len(sub.scripts) != 1 {
+		t.Fatalf("expected 1 submission, got %d", len(sub.scripts))
+	}
+}
+
 // minimal config sufficient for the render path
 const testSbatchConfig = `
 sbatch-config:
