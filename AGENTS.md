@@ -52,8 +52,9 @@ four tools: sami (builds), samctr (containers), crtar (tarballs), rgw
 
 ## Context
 
-- Design docs and patch archive: ~/agent-context/asc-software-stack/
-  (sami/design.md, sam/*.patch).
+- Design docs live in the repo: docs/ (source of truth).
+- Patch archive (agent sandbox transport):
+  ~/agent-context/asc-software-stack/sam/*.patch
 - Related repos: asc-software-layer, asc-software-layer-scripts
   (gitlab.tuwien.ac.at/vsc/software-stacks).
 - More broadly related: <github.com/EESSI> software-layer, software-layer-scripts
