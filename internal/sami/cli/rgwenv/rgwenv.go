@@ -55,8 +55,12 @@ func (d Data) Render() string {
 	if d.Region != "" {
 		b.WriteString("export AWS_DEFAULT_REGION=" + d.Region + "\n")
 	}
-	if _, err := os.Stat(filepath.Join(d.Home, bundleRelPath)); err == nil {
-		b.WriteString("export AWS_CA_BUNDLE=${HOME}/" + bundleRelPath + "\n")
+	if bundle := filepath.Join(d.Home, bundleRelPath); fileExists(bundle) {
+		// absolute path law: the file is plain KEY=VALUE, consumable by
+		// shells and non-shell parsers alike; no shell expansion deferred
+		// to source time. The path is host-view; the container-side
+		// translation is the submit wrapper's law, not this file's.
+		b.WriteString("export AWS_CA_BUNDLE=" + bundle + "\n")
 	}
 	return b.String()
 }
@@ -86,6 +90,12 @@ func WriteAtomic(path, content string) (err error) {
 		return fmt.Errorf("renaming %s -> %s: %w", tmpName, path, rerr)
 	}
 	return nil
+}
+
+// fileExists is the bundle probe (a plain regular-file check).
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // Run executes the rgw-env mechanics: resolve all legs via r, compose,

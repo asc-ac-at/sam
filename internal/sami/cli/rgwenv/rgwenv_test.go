@@ -69,8 +69,12 @@ func TestRender_CABundleLineWhenBundleExists(t *testing.T) {
 	}
 	d := &Data{Home: home}
 	content := d.Render()
-	if !strings.Contains(content, "export AWS_CA_BUNDLE=${HOME}/"+bundleRelPath+"\n") {
-		t.Errorf("CA line missing though bundle exists:\n%s", content)
+	want := "export AWS_CA_BUNDLE=" + filepath.Join(home, bundleRelPath) + "\n"
+	if !strings.Contains(content, want) {
+		t.Errorf("CA line not the absolute host path %q:\n%s", want, content)
+	}
+	if strings.Contains(content, "${HOME}") || strings.Contains(content, "$HOME") {
+		t.Errorf("render defers expansion to source time (must be plain KEY=VALUE):\n%s", content)
 	}
 }
 

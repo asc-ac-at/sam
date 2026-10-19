@@ -374,12 +374,19 @@ contract. Rotation becomes "run it again."
    deliberate soften of keks' no-masking law).
 
 **CA bundle, resolved once:** if `$HOME/.config/rgw/tls-ca-bundle.pem`
-exists at generation time, the file gets
-`export AWS_CA_BUNDLE="${HOME}/.config/rgw/tls-ca-bundle.pem"`; else no
-line. The `/opt/rgw` leg of the old recipe dies: it existed only for
-in-container sourcing, which never happens — the sbatch template sets
-the container path itself. The one-time `cp` of the bundle into
-~/.config/rgw stays a documented manual step (open question 4).
+exists at generation time, the file gets an **`AWS_CA_BUNDLE` export
+with the absolute host path** (e.g. `/home/ad/.config/rgw/...`); else
+no line. The `/opt/rgw` leg of the old recipe dies: it existed only
+for in-container sourcing, which never happens — the sbatch template
+sets the container path itself. The one-time `cp` of the bundle into
+~/.config/rgw stays a documented manual step (`--setup` covers it).
+
+*Law change 2026-10-19 (patch 0006):* the original design spelled the
+line as `${HOME}/...` to defer expansion to source time. Review
+rejected that: the file must be plain KEY=VALUE, consumable by shells
+and non-shell parsers alike, and home-scoped paths are identical for
+login and compute nodes on musica (NFS). The renderer resolves the
+absolute path at generation time.
 
 ## Configuration
 
