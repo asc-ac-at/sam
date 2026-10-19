@@ -2,7 +2,9 @@ package build
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -12,10 +14,14 @@ import (
 
 func TestNewCvmfsBuildCmdData(t *testing.T) {
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData return err %v`, err)
+	}
 
 	if data == nil {
-		t.Fatal("NewCvmfsBuildCmdData returned nil")
+		t.Fatal(`NewCvmfsBuildCmdData returned nil`)
 	}
 
 	if data.SWSVariant != opts.SWSVariant {
@@ -40,7 +46,11 @@ func TestNewCvmfsBuildCmdData(t *testing.T) {
 
 func TestCvmfsBuildCmdData_Publish(t *testing.T) {
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData return err %v`, err)
+	}
 
 	data.Publish = true
 	if !data.Publish {
@@ -57,10 +67,10 @@ func TestNewCvmfsBuildCmdData_DifferentOpts(t *testing.T) {
 	opts := optsForTest()
 	opts.SWSVariant = "2026.01"
 
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
 
-	if data.SWSVariant != "2026.01" {
-		t.Errorf("SWSVariant = %q, want %q", data.SWSVariant, "2026.01")
+	if data.SWSVariant != "2026.01" || err != nil {
+		t.Errorf(`SWSVariant = %q, want %q %v`, data.SWSVariant, "2026.01", err)
 	}
 }
 
@@ -73,7 +83,12 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 
 	opts := optsForTest()
 	opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.AccelSubdir = "accel/nvidia/cc90"
@@ -101,8 +116,47 @@ func TestRenderBuildCmd_WritesFile(t *testing.T) {
 	if !strings.Contains(got, data.SWSVariant) {
 		t.Errorf("rendered output should contain SWSVariant %q", data.SWSVariant)
 	}
-	if !strings.Contains(got, "eb -r --easystack") {
+	ebCmd := "eb --parallel=\"${EB_PARALLEL:-$(nproc)}\""
+	if !strings.Contains(got, ebCmd) {
 		t.Errorf("rendered output should contain eb command, got: %q", got)
+	}
+	if !strings.Contains(got, "-r --easystack ${stack_file}") {
+		t.Errorf("rendered output should contain the easystack argument, got: %q", got)
+	}
+}
+
+// TestRenderBuildCmd_EbFailureSalvagesCtrTmp asserts that each failing eb run
+// salvages the container /tmp to <logdir>/ctr-tmp *before* exiting, and that
+// the old (dead) salvage placement in the publish block is gone.
+// See sami TODO-6b2d6f99.
+func TestRenderBuildCmd_EbFailureSalvagesCtrTmp(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
+
+	opts := optsForTest()
+	opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	got := string(content)
+
+	salvage := "cp -a /tmp/ " + data.Logdir + "/ctr-tmp"
+	if n := strings.Count(got, salvage); n != len(opts.Files) {
+		t.Errorf("expected one salvage copy per easystack (%d), got %d", len(opts.Files), n)
+	}
+	if !strings.Contains(got, salvage+"\n    exit 1") {
+		t.Errorf("salvage copy should immediately precede the failure exit, got:\n%s", got)
+	}
+	if strings.Contains(got, `[[ "$?" -eq 0 ]]`) {
+		t.Errorf("dead exit-status wrapper around the publish block should be gone, got:\n%s", got)
 	}
 }
 
@@ -116,7 +170,12 @@ func TestRenderBuildCmd_HermeticUserNamespace(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	data := NewCvmfsBuildCmdData(optsForTest())
+	opts := optsForTest()
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
 		t.Fatalf("renderBuildCmd failed: %v", err)
@@ -130,6 +189,62 @@ func TestRenderBuildCmd_HermeticUserNamespace(t *testing.T) {
 	}
 }
 
+// TestRenderBuildCmd_BuildEnv asserts that --build-env entries render as
+// verbatim exports, in declaration order, after the hermetic unset block and
+// before the lmod init (TODO-32aed584).
+func TestRenderBuildCmd_BuildEnv(t *testing.T) {
+	outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
+
+	opts := optsForTest()
+	opts.BuildEnv = []string{
+		"EESSI_OVERRIDE_STRICT_INSTALLPATH_CHECK=1",
+		"MY_FLAG=${HOME}/x",
+	}
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	got := string(content)
+
+	for _, kv := range opts.BuildEnv {
+		if !strings.Contains(got, "export "+kv) {
+			t.Errorf("rendered output should contain %q, got:\n%s", "export "+kv, got)
+		}
+	}
+
+	// placement and order: after the hermetic unset, before lmod init,
+	// declaration order preserved
+	iUnset := strings.Index(got, "unset EESSI_ACCELERATOR_TARGET_OVERRIDE")
+	iFirst := strings.Index(got, "export "+opts.BuildEnv[0])
+	iSecond := strings.Index(got, "export "+opts.BuildEnv[1])
+	iLmod := strings.Index(got, "source /cvmfs/software.eessi.io")
+	if !(iUnset >= 0 && iUnset < iFirst && iFirst < iSecond && iSecond < iLmod) {
+		t.Errorf("bad ordering (unset=%d first=%d second=%d lmod=%d):\n%s", iUnset, iFirst, iSecond, iLmod, got)
+	}
+
+	assertBashSyntax(t, outFile)
+}
+
+// TestNewCvmfsBuildCmdData_BuildEnvRejectsMalformed asserts that --build-env
+// entries without KEY=VALUE shape are rejected at construction time.
+func TestNewCvmfsBuildCmdData_BuildEnvRejectsMalformed(t *testing.T) {
+	for _, bad := range []string{"NOEQUALS", "=EMPTYKEY"} {
+		opts := optsForTest()
+		opts.BuildEnv = []string{bad}
+		if _, err := NewCvmfsBuildCmdData(opts); err == nil {
+			t.Errorf("expected error for --build-env entry %q, got nil", bad)
+		}
+	}
+}
+
 func TestRenderBuildCmd_PublishTrue(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
 	if err != nil {
@@ -138,7 +253,12 @@ func TestRenderBuildCmd_PublishTrue(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
@@ -162,7 +282,11 @@ func TestRenderBuildCmd_PublishCPUOnly(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.AccelSubdir = ""
@@ -198,8 +322,15 @@ func TestRenderBuildCmd_PublishLogdir(t *testing.T) {
 	}
 
 	t.Run("concrete logdir in failure branch", func(t *testing.T) {
+
 		opts := optsForTest()
-		data := NewCvmfsBuildCmdData(opts)
+		opts.Files = []string{"asc_eb_5.4.0-nvidia-nvhpc-25.9.yaml"}
+		data, err := NewCvmfsBuildCmdData(opts)
+
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
 		data.Publish = true
 		data.ArchSubdir = "x86_64/amd/zen4"
 
@@ -224,7 +355,14 @@ func TestRenderBuildCmd_PublishLogdir(t *testing.T) {
 	t.Run("empty basepath renders degenerate path", func(t *testing.T) {
 		opts := optsForTest()
 		opts.BuildLogBasePath = ""
-		data := NewCvmfsBuildCmdData(opts)
+		opts.Files = []string{"asc_eb_5.4.0-nvidia-nvhpc-25.9.yaml"}
+
+		data, err := NewCvmfsBuildCmdData(opts)
+
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
 		data.Publish = true
 		data.ArchSubdir = "x86_64/amd/zen4"
 
@@ -247,7 +385,12 @@ func TestRenderBuildCmd_PublishFalse(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = false
 	data.OutputDir = data.Logdir // RunE defaults an empty output-dir to the per-run log dir
 
@@ -278,7 +421,11 @@ func TestRenderBuildCmd_LmodInit(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	err = renderBuildCmd(buildCmdTmpl, data, outFile)
@@ -298,11 +445,16 @@ func TestRenderBuildCmd_LmodInit(t *testing.T) {
 }
 
 func TestRenderBuildCmd_InvalidPath(t *testing.T) {
+
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 
 	// Use a path where parent doesn't exist
-	err := renderBuildCmd(buildCmdTmpl, data, "/nonexistent/dir/build_cmd.sh")
+	err = renderBuildCmd(buildCmdTmpl, data, "/nonexistent/dir/build_cmd.sh")
 	if err == nil {
 		t.Error("expected error for invalid path")
 	}
@@ -317,7 +469,11 @@ func TestRenderBuildCmd_NonZeroSWS(t *testing.T) {
 
 	opts := optsForTest()
 	opts.SWSVariant = "2026.01"
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
 
 	outFile := filepath.Join(tmpDir, "build_cmd.sh")
 	err = renderBuildCmd(buildCmdTmpl, data, outFile)
@@ -340,6 +496,92 @@ func optsForTest() *shared.Options {
 	}
 }
 
+// assertBashSyntax runs `bash -n` on the rendered script. Mixing Go
+// text/template guards with shell strings is brittle (an unbalanced quote in
+// a guarded append breaks the whole script at runtime), so syntax-check the
+// rendered product, not just the template.
+func assertBashSyntax(t *testing.T, path string) {
+	t.Helper()
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available")
+	}
+	if out, err := exec.Command(bash, "-n", path).CombinedOutput(); err != nil {
+		t.Fatalf("rendered script failed bash -n: %v\n%s", err, out)
+	}
+}
+
+// renderToDisk renders the build command template with data and returns the
+// rendered content plus the path it was written to (for syntax checks).
+func renderToDisk(t *testing.T, data *CvmfsBuildCmdData) (string, string) {
+	t.Helper()
+	tmpDir, err := os.MkdirTemp("", "sami-render-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	outFile := filepath.Join(tmpDir, "build_cmd.sh")
+	if err := renderBuildCmd(buildCmdTmpl, data, outFile); err != nil {
+		t.Fatalf("renderBuildCmd failed: %v", err)
+	}
+	content, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("Failed to read rendered file: %v", err)
+	}
+	return string(content), outFile
+}
+
+// TestRenderBuildCmd_OwnerGroup pins the post-hoc ownership passthrough:
+// sami's --owner/--group must surface on the crtar invocation in the rendered
+// build script (crtar forwards them to tar's --owner/--group).
+func TestRenderBuildCmd_OwnerGroup(t *testing.T) {
+	opts := optsForTest()
+	opts.Owner = "90116"
+	opts.Group = "200300"
+
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.AccelSubdir = "accel/nvidia/cc90"
+
+	got, outFile := renderToDisk(t, data)
+	if !strings.Contains(got, "--owner=90116") {
+		t.Errorf("rendered output should contain --owner=90116, got: %q", got)
+	}
+	if !strings.Contains(got, "--group=200300") {
+		t.Errorf("rendered output should contain --group=200300, got: %q", got)
+	}
+	// both guarded appends exercised (accel + owner + group): full syntax check
+	assertBashSyntax(t, outFile)
+}
+
+// TestRenderBuildCmd_NoOwnerGroup asserts crtar receives no ownership flags
+// when sami's --owner/--group are unset; the tarball then keeps the on-disk
+// owners.
+func TestRenderBuildCmd_NoOwnerGroup(t *testing.T) {
+	opts := optsForTest()
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+	data.Publish = true
+	data.ArchSubdir = "x86_64/amd/zen4"
+	data.AccelSubdir = "accel/nvidia/cc90"
+
+	got, outFile := renderToDisk(t, data)
+	if strings.Contains(got, "--owner=") {
+		t.Errorf("rendered output should not contain --owner without option, got: %q", got)
+	}
+	if strings.Contains(got, "--group=") {
+		t.Errorf("rendered output should not contain --group without option, got: %q", got)
+	}
+	assertBashSyntax(t, outFile)
+}
+
 // TestRenderBuildCmd_LegacyNFSDrop pins the legacy transport: no --publish,
 // tarball dropped straight into the NFS-shared archives dir and left there.
 func TestRenderBuildCmd_LegacyNFSDrop(t *testing.T) {
@@ -350,7 +592,12 @@ func TestRenderBuildCmd_LegacyNFSDrop(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = false
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.OutputDir = "/opt/adm/sam-archives"
@@ -384,7 +631,12 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	opts := optsForTest()
-	data := NewCvmfsBuildCmdData(opts)
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.OutputDir = "/log/run/sami.xyz"
@@ -419,6 +671,10 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 	if !strings.Contains(got, "export AWS_ENDPOINT_URL=https://rgw.example.org") {
 		t.Errorf("rendered output should export the configured endpoint, got: %q", got)
 	}
+	if strings.Contains(got, "rgw_creds=$HOME/.config/rgw/sam.env") {
+		t.Errorf("creds are forwarded by the sbatch wrapper (APPTAINERENV_) since the cleanenv change; in-container creds sourcing must be gone, got: %q", got)
+	}
+	assertBashSyntax(t, outFile)
 }
 
 // RGWEndpoint empty: no AWS_ENDPOINT_URL export should be rendered
@@ -426,7 +682,13 @@ func TestRenderBuildCmd_PublishRGW(t *testing.T) {
 func TestRenderBuildCmd_PublishRGWNoEndpoint(t *testing.T) {
 	outFile := filepath.Join(t.TempDir(), "build_cmd.sh")
 
-	data := NewCvmfsBuildCmdData(optsForTest())
+	opts := optsForTest()
+	data, err := NewCvmfsBuildCmdData(opts)
+
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+
 	data.Publish = true
 	data.ArchSubdir = "x86_64/amd/zen4"
 	data.OutputDir = "/log/run/sami.xyz"
@@ -443,6 +705,210 @@ func TestRenderBuildCmd_PublishRGWNoEndpoint(t *testing.T) {
 	}
 	if strings.Contains(string(content), "export AWS_ENDPOINT_URL") {
 		t.Errorf("rendered output should not export AWS_ENDPOINT_URL without a configured endpoint, got:\n%s", string(content))
+	}
+}
+
+// TestRenderBuildCmd_TarballOnlyAfterEbSuccess pins commit b8bd207 (sami
+// TODO-7f9116fa): the tar step - plain crtar or the publish/rgw block - runs
+// only under `if [[ "$eb_rc" == 0 ]]`. eb_rc defaults to 1 before the
+// easystack loop and is recaptured after every eb run, so a render with no
+// easystacks can never produce a tarball, and any failed eb run exits before
+// the tar step is reached.
+func TestRenderBuildCmd_TarballOnlyAfterEbSuccess(t *testing.T) {
+	const (
+		ebInit   = "eb_rc=1"
+		ebRun    = `eb --parallel="${EB_PARALLEL:-$(nproc)}"`
+		ebRcCap  = `eb_rc="$?"`
+		failBr   = `if [[ "$eb_rc" -ne 0 ]]; then`
+		tarGuard = `if [[ "$eb_rc" == 0 ]]; then`
+	)
+
+	t.Run("legacy crtar path", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+		data.Publish = false
+
+		got, outFile := renderToDisk(t, data)
+
+		// fail-safe default ahead of the first eb run
+		iInit := strings.Index(got, ebInit)
+		iFirstEb := strings.Index(got, ebRun)
+		if iInit < 0 || iFirstEb < 0 || iInit > iFirstEb {
+			t.Errorf("expected %q before the first eb invocation, got:\n%s", ebInit, got)
+		}
+
+		// exit status recaptured once per easystack
+		if n := strings.Count(got, ebRcCap); n != len(opts.Files) {
+			t.Errorf("expected %q once per easystack (%d), got %d", ebRcCap, len(opts.Files), n)
+		}
+		if n := strings.Count(got, failBr); n != len(opts.Files) {
+			t.Errorf("expected failure branch %q once per easystack (%d), got %d", failBr, len(opts.Files), n)
+		}
+
+		// exactly one guard, wrapping the plain crtar invocation
+		if n := strings.Count(got, tarGuard); n != 1 {
+			t.Errorf("expected exactly one tarball guard %q, got %d", tarGuard, n)
+		}
+		if want := tarGuard + "\n    crtar ${ARGS}\nfi"; !strings.Contains(got, want) {
+			t.Errorf("expected plain crtar wrapped by the eb_rc guard (%q), got:\n%s", want, got)
+		}
+
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("publish path", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+		data.Publish = true
+		data.RGW = true
+		data.RGWBucket = "sam-archives"
+
+		got, outFile := renderToDisk(t, data)
+
+		iGuard := strings.Index(got, tarGuard)
+		if iGuard < 0 {
+			t.Fatalf("expected the publish block guarded by %q, got:\n%s", tarGuard, got)
+		}
+		iFi := strings.Index(got[iGuard:], "\nfi")
+		if iFi < 0 {
+			t.Fatalf("tarball guard %q has no closing fi, got:\n%s", tarGuard, got)
+		}
+		block := got[iGuard : iGuard+iFi]
+		for _, want := range []string{
+			`tb="$(crtar ${ARGS}`,
+			`rgw object put sam-archives "$bn" "$tb"`,
+			`rgw object put sam-archives "$bn.sha256"`,
+		} {
+			if !strings.Contains(block, want) {
+				t.Errorf("expected %q inside the eb_rc guard, got:\n%s", want, got)
+			}
+		}
+
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("no easystacks keeps tar step unreachable", func(t *testing.T) {
+		opts := optsForTest()
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+		data.Publish = false
+
+		got, outFile := renderToDisk(t, data)
+
+		if strings.Contains(got, ebRun) {
+			t.Errorf("no easystacks: rendered output should contain no eb run, got:\n%s", got)
+		}
+		if !strings.Contains(got, ebInit) {
+			t.Errorf("no easystacks: keep the fail-safe %q so the guard (eb_rc stays 1) blocks the tar step, got:\n%s", ebInit, got)
+		}
+		if !strings.Contains(got, tarGuard) {
+			t.Errorf("no easystacks: tar step must stay guarded by %q, got:\n%s", tarGuard, got)
+		}
+
+		assertBashSyntax(t, outFile)
+	})
+}
+
+// TestRenderBuildCmd_EbFlags pins the --eb-flags passthrough (commit c35172a,
+// sami TODO-8df7d0e0): each flag renders verbatim on its own continuation
+// line, in declaration order, inside the eb invocation; with no flags the
+// plain two-line eb invocation stays intact.
+func TestRenderBuildCmd_EbFlags(t *testing.T) {
+	const ebRun = `eb --parallel="${EB_PARALLEL:-$(nproc)}" \`
+
+	t.Run("flags render in order on continuation lines", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		opts.EasyBuildFlags = []string{"--rebuild", "--fetch-timeout=60"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		want := ebRun + "\n    --rebuild \\\n    --fetch-timeout=60 \\\n    -r --easystack ${stack_file}"
+		if !strings.Contains(got, want) {
+			t.Errorf("expected flags in declaration order on continuation lines:\n%s\ngot:\n%s", want, got)
+		}
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("no flags keeps the plain eb invocation", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		want := ebRun + "\n    -r --easystack ${stack_file}"
+		if !strings.Contains(got, want) {
+			t.Errorf("expected bare two-line eb invocation:\n%s\ngot:\n%s", want, got)
+		}
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("flags pass through verbatim", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.3.0-system.yaml"}
+		opts.EasyBuildFlags = []string{"--optarch=GENERIC", "--from-pr 12345"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		for _, f := range opts.EasyBuildFlags {
+			if want := "    " + f + " \\\n"; !strings.Contains(got, want) {
+				t.Errorf("expected flag rendered verbatim as its own continuation line %q, got:\n%s", want, got)
+			}
+		}
+		assertBashSyntax(t, outFile)
+	})
+
+	t.Run("flags repeat per easystack", func(t *testing.T) {
+		opts := optsForTest()
+		opts.Files = []string{"asc_eb_5.2.1-system-CUDA-12.9.1.yaml", "asc_eb_5.3.0-system.yaml"}
+		opts.EasyBuildFlags = []string{"--rebuild"}
+		data, err := NewCvmfsBuildCmdData(opts)
+		if err != nil {
+			t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+		}
+
+		got, outFile := renderToDisk(t, data)
+
+		if n := strings.Count(got, "    --rebuild \\\n"); n != len(opts.Files) {
+			t.Errorf("expected the flag once per easystack (%d), got %d", len(opts.Files), n)
+		}
+		assertBashSyntax(t, outFile)
+	})
+}
+
+// TestNewCvmfsBuildCmdData_EbFlags asserts the --eb-flags values reach the
+// template data unaltered (in particular, no CSV splitting on the way).
+func TestNewCvmfsBuildCmdData_EbFlags(t *testing.T) {
+	opts := optsForTest()
+	opts.EasyBuildFlags = []string{"--rebuild", "--try-amend=a=1,2"}
+	data, err := NewCvmfsBuildCmdData(opts)
+	if err != nil {
+		t.Fatalf(`NewCvmfsBuildCmdData(opts) err: %v`, err)
+	}
+	if !reflect.DeepEqual(data.EasyBuildFlags, opts.EasyBuildFlags) {
+		t.Errorf("EasyBuildFlags = %v, want %v (from opts)", data.EasyBuildFlags, opts.EasyBuildFlags)
 	}
 }
 

@@ -374,3 +374,31 @@ func TestObjectDeleteAndMissingKey(t *testing.T) {
 		t.Errorf("downloading a deleted object: err = %v, want NoSuchKey", err)
 	}
 }
+
+// Regression: on compute nodes under --cleanenv nothing provides AWS_REGION,
+// and the SDK refuses regionless S3 requests ("A region must be set...").
+// The client must substitute a placeholder; an env-provided region must win.
+func TestNew_RegionFallback(t *testing.T) {
+	// isolate from ambient AWS config
+	t.Setenv("AWS_CONFIG_FILE", "/dev/null")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", "/dev/null")
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+
+	c, err := New(context.Background())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := c.S3Client.Options().Region; got != defaultRegion {
+		t.Errorf("no region in env: got %q, want %q", got, defaultRegion)
+	}
+
+	t.Setenv("AWS_REGION", "eu-west-1")
+	c, err = New(context.Background())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := c.S3Client.Options().Region; got != "eu-west-1" {
+		t.Errorf("env region must win: got %q, want %q", got, "eu-west-1")
+	}
+}

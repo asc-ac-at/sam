@@ -5,14 +5,17 @@
 package samctr
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	isamctr "github.com/asc-ac-at/sam/internal/samctr"
+	"github.com/asc-ac-at/sam/pkg/subproc"
 )
 
 // basically, we need to create a list of fusemounts that appeared in the
@@ -145,23 +148,35 @@ func PrepareContainerPreRun(cmd *cobra.Command, args []string) error {
 
 	var apptainerCmdOpts []string
 
+	// hermetic container env: pass --cleanenv when requested via CLI or config
+	// (build jobs go through sami → exec; interactive shells stay permissive
+	// unless explicitly requested)
+	if CleanEnv || AppConfig.CleanEnv {
+		apptainerCmdOpts = append(apptainerCmdOpts, "--cleanenv")
+	}
+
 	// nvidia setup (optional)
 	// check for nvidia-smi, if present:
 	//  + setup nvidia flag for apptainer
 	//  + setup bind mount
 	var nvidiaBinds []isamctr.BindMount
-	nvidiaSmiPath, n_err := IoRunner("which", "nvidia-smi")
-	nvidiaFlag := ""
-	if n_err != nil { // setup nvidia
-		return fmt.Errorf("failed to find host nvidia: %w", n_err)
-	} else {
-		nvidiaFlag = "--nv"
-		apptainerCmdOpts = append(apptainerCmdOpts, nvidiaFlag)
-		// which returns a linebreak
-		nvSafePath := strings.TrimSuffix(nvidiaSmiPath, "\n")
-		nvBm := isamctr.NewBindMount(nvSafePath, nvSafePath, "ro")
-		nvidiaBinds = append(nvidiaBinds, *nvBm)
+
+	cfg := subproc.New([]string{"which", "nvidia-smi"})
+	cfg.Timeout = 3 * time.Second
+	var stdout, stderr bytes.Buffer
+	cfg.Stdout = &stdout
+	cfg.Stderr = &stderr
+	if err := cfg.Run(); err != nil {
+		return fmt.Errorf(`which nvidia-smi failed: %q`, err)
 	}
+	nvidiaSmiPath := strings.TrimSpace(stdout.String())
+
+	nvidiaFlag := "--nv"
+	apptainerCmdOpts = append(apptainerCmdOpts, nvidiaFlag)
+	// which returns a linebreak
+	nvSafePath := strings.TrimSuffix(nvidiaSmiPath, "\n")
+	nvBm := isamctr.NewBindMount(nvSafePath, nvSafePath, "ro")
+	nvidiaBinds = append(nvidiaBinds, *nvBm)
 
 	// Merge bind paths
 	allBinds := make([]isamctr.BindMount, 0, len(configBinds)+len(cliBinds)+len(state.BindMounts)+len(nvidiaBinds))
@@ -179,12 +194,22 @@ func PrepareContainerPreRun(cmd *cobra.Command, args []string) error {
 		ApptainerCmdOpts: append([]string{}, apptainerCmdOpts...),
 	}
 
-	// With the legacy --nv path (use nvidia-container-cli = no), apptainer
-	// prefixes LD_LIBRARY_PATH with the *host* driver library directories
-	// (e.g. /lib:/lib64). Inside the container these resolve to the image's
-	// native libs, whose glibc may be older than what EESSI compat-layer
-	// binaries require (LD_LIBRARY_PATH is searched before RUNPATH). Override
-	// so only the injected GPU libs dir precedes RUNPATH resolution.
+	// Legacy --nv path (use nvidia-container-cli = no): apptainer's
+	// action-script helper set_default_ld_library_path() prepends the
+	// container's own ldconfig dirs (/lib:/lib64) whenever LD_LIBRARY_PATH
+	// equals the default "/.singularity.d/libs". Those resolve to the
+	// image's native glibc, which may be older than what EESSI compat-layer
+	// binaries require (LD_LIBRARY_PATH is searched before RUNPATH) --
+	// symptom: lua5.1: /lib64/libm.so.6: version `GLIBC_2.38' not found.
+	//
+	// Setting the env-provided value to anything NOT exactly the default
+	// suppresses that prepend; apptainer then appends :/.singularity.d/libs
+	// itself (process_linux.go injectEnvHandler), so the *doubled*
+	// "/.singularity.d/libs:/.singularity.d/libs" is expected and harmless.
+	// Do NOT "fix" the doubling: an empty value instead suppresses the
+	// libs-dir append entirely, and the exact default brings back the
+	// /lib:/lib64 prepend. Only the injected GPU libs dir may precede
+	// RUNPATH resolution.
 	if nvidiaFlag != "" {
 		runtime.Environ = append(runtime.Environ,
 			"APPTAINERENV_LD_LIBRARY_PATH=/.singularity.d/libs")

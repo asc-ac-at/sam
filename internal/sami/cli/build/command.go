@@ -8,12 +8,32 @@ import (
 	"fmt"
 	"log/slog"
 
+	easybuild "github.com/asc-ac-at/sam/internal/sami"
 	"github.com/asc-ac-at/sam/internal/sami/cli/shared"
 	"github.com/asc-ac-at/sam/internal/sami/command/git"
 	"github.com/asc-ac-at/sam/internal/sami/config"
 	"github.com/asc-ac-at/sam/internal/sami/logging/buildlog"
 	"github.com/asc-ac-at/sam/internal/sami/sbatch"
 	"github.com/spf13/cobra"
+)
+
+var (
+	buildExample = `
+	# build for a zen4/h100 arch/accel combination using a specific slurm partition, using the most recently changed files in a gitlab merge request
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-mr-id <N>
+
+	# build the most recently changed file(s) from a git branch
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-branch <remote-branch>
+
+	# build using a specific file from a git commit
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-commit <sha> --files easystack/2025.06/some-file.yaml
+
+	# build and publish the tarball to rados-gateway
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-mr-id <N> --publish
+
+	# change the ownership of the files in the created tarball
+	sami build --name <some-name> --arch zen4 --accel cc90 --build-backend slurm --partition <some-partition> --git-mr-id <N> --owner <some-user> --group <some-group>
+	`
 )
 
 // validatePublish enforces the publish invariant: uploading the tarball to
@@ -42,6 +62,7 @@ func NewCommand(opts *shared.Options, logger *slog.Logger) *cobra.Command {
 Typically you run this command when you want to publish software to a
 cvmfs repository. The configuration of the build environment is specified
 by the container tool e.g: samctr.`,
+		Example: buildExample,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if opts.Name == "" {
 				return errors.New("--name is required")
@@ -58,6 +79,22 @@ by the container tool e.g: samctr.`,
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+
+			// 0. possible coroutine implementation
+			//    if by this point we can determine:
+			//    user specified "--files"  OR git repo's "changed files",
+			//    we could possible dispatch most of the following in the context of a coroutine.
+			//    The result of that would be that we would not need to build each easystack file
+			//    sequentially.
+			//    + each easystack file gets it's own:
+			//       - logdir
+			//       - build_cmd.sh
+			//       - slurm job
+			//    Cost:
+			//    + we need to determine if we rely on remote changes from git, if so, then we need
+			//    to do a version of `git.GetChangedFiles(state, logger)` remotely
+			//    The other (distinct) use case, is when we have multiple "accel" or
+			//    "arch" values.
 
 			// 1. setup logging
 			blPath, err := buildlog.NewBuildLogPaths(opts.BuildLogBasePath, opts.Name)
@@ -77,7 +114,10 @@ by the container tool e.g: samctr.`,
 			}
 
 			// 3.1 setup build cmd data
-			data := NewCvmfsBuildCmdData(opts)
+			data, err := NewCvmfsBuildCmdData(opts)
+			if err != nil {
+				return fmt.Errorf(`NewCmfsBuildCmdData(opts) failed with %w`, err)
+			}
 			publish, _ := cmd.Flags().GetBool("publish")
 			data.Publish = publish
 
@@ -88,21 +128,22 @@ by the container tool e.g: samctr.`,
 				data.OutputDir = data.Logdir
 			}
 
+			// 3.1.1 configure subdirectories
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("publishing requires a sami config with arch-mapping: %w", err)
+			}
+			archSubdir, accelSubdir, err := resolveSubdirs(cfg, arch, accel)
+			if err != nil {
+				return err
+			}
+			data.ArchSubdir = archSubdir
+			data.AccelSubdir = accelSubdir
+
 			// when publishing, resolve the crtar subdirs now: the mapping
 			// tables live in the sami config and are needed identically for
 			// both the slurm and the local backend
 			if data.Publish {
-				cfg, err := config.Load()
-				if err != nil {
-					return fmt.Errorf("publishing requires a sami config with arch-mapping: %w", err)
-				}
-				archSubdir, accelSubdir, err := resolveSubdirs(cfg, arch, accel)
-				if err != nil {
-					return err
-				}
-				data.ArchSubdir = archSubdir
-				data.AccelSubdir = accelSubdir
-
 				if err := validatePublish(cfg); err != nil {
 					return err
 				}
@@ -112,11 +153,22 @@ by the container tool e.g: samctr.`,
 			}
 
 			// 3.2 render build cmd
+			var fpaths []string
 			if len(state.TargetFiles) > 0 {
-				data.Easystacks = git.AllTargetFilePaths(state)
+				fpaths = git.AllTargetFilePaths(state)
 			} else {
-				data.Easystacks = git.AllChangedFilePaths(state)
+				fpaths = git.AllChangedFilePaths(state)
 			}
+
+			var estacks []*easybuild.Easystack
+			for _, fpath := range fpaths {
+				es, err := easybuild.NewEasystack(fpath)
+				if err != nil {
+					return fmt.Errorf(`easybuild.NewEasystack(%q) failed with %w`, fpath, err)
+				}
+				estacks = append(estacks, es)
+			}
+			data.Easystacks = estacks
 
 			if err = renderBuildCmd(buildCmdTmpl, data, blPath.BuildCmd); err != nil {
 				return err
@@ -124,7 +176,7 @@ by the container tool e.g: samctr.`,
 			logger.Debug(fmt.Sprintf("rendered build command to: %s", blPath.BuildCmd))
 
 			// 4+5. select build backend and hand the rendered build to it
-			return runBackend(opts, blPath, logger, sbatch.NewSbatchSubmitter())
+			return runBackend(opts, blPath, logger, sbatch.NewSbatchSubmitter(opts.SbatchFlags), publish)
 		},
 	}
 

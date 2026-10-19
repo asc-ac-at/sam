@@ -34,6 +34,7 @@ type Config struct {
 	FuseMounts     []isamctr.FuseMount `mapstructure:"fusemounts"`
 	FuseCmdRW      string              `mapstructure:"fuse_cmd_rw"`
 	WriteableRepos []string            `mapstructure:"writeable_repos"`
+	CleanEnv       bool                `mapstructuce:"cleanenv"`
 }
 
 var AppConfig = &Config{}

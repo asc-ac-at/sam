@@ -1,52 +1,109 @@
 #!/usr/bin/env bash
 
 # General setup
+export EESSI_SITE_INSTALL=1
+export EESSI_SITE_SOFTWARE_PREFIX={{ .CvmfsRepo }}
+
+# hermetic target selection: build env must not inherit the login shell's view
+unset EESSI_USER_INSTALL || true
+unset EESSI_ACCELERATOR_TARGET_OVERRIDE EESSI_ACCELERATOR_TARGET EESSI_ACCEL_SUBDIR EESSI_ACCEL_SOFTWARE_SUBDIR_OVERRIDE
+{{- if .BuildEnv }}
+
+# extra env vars from --build-env (verbatim; rendered after the hermetic unset)
+{{- range .BuildEnv }}
+export {{ . }}
+{{- end }}
+{{- end }}
+
+# Bugfixes
+# need this to fix issue with failing downloads when using Easybuild
+export SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt
+
+{{- if .AccelSubdir }}
+export EESSI_ACCELERATOR_TARGET_OVERRIDE={{ .AccelSubdir }}
+export EESSI_ACCELERATOR_INSTALL=1
+
+{{- end }}
+
 source {{ .LmodInit }}
-export EESSI_PROJECT_INSTALL={{ .CvmfsRepo }}
 
 ml --force purge
-ml load "EESSI/{{ .SWSVariant }}" "ASC/{{ .SWSVariant }}" \
-    && ml load EESSI-extend || printf "ERR - module not found EESSI/{{ .SWSVariant }} ASC/{{ .SWSVariant }}"
+ml load "EESSI/{{ .SWSVariant }}"
 
-# sami builds are hermetic: drop the builder's user namespace ($HOME/eessi)
-# from eb module/dependency resolution (sami TODO-dd222a56)
-unset EESSI_USER_INSTALL || true
+{{- if .AccelSubdir }}
+# Guard against choking on EESSI's missing cuda modules
+# TODO: make a stronger check here, it's possible someone forgets to pass cuda in the .Name
+echo {{ .Name }} | grep -iq cuda
+if [ "$?" -eq 0 ]; then
+    module unuse $(echo "$MODULEPATH" | tr ':' '\n' | grep -E 'eessi\.io/.*accel')
+fi
 
-{{ range .Easystacks }}
-echo "Building easystack: {{ . }}"
-stack_file="{{ . }}"
+# Detect CUDA compute capability from the build node's GPU (X.Y, as EasyBuild expects).
+# Env wins over cuda_cc in easyconfigs (cmakemake.py:387); unset means fail loudly, not wrong-arch.
+if [ -z "${EASYBUILD_CUDA_COMPUTE_CAPABILITIES}" ]; then
+    _cc=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1)
+    [ -n "${_cc}" ] && export EASYBUILD_CUDA_COMPUTE_CAPABILITIES="${_cc}"
+    unset _cc
+fi
+
+{{- end }}
+
+eb_rc=1
+{{- $logdir := .Logdir }}
+{{- $ebflags := .EasyBuildFlags }}
+{{- range .Easystacks }}
+ml load EESSI-extend
+ml load {{ .EbVersion }}
+
+echo "Building easystack: {{ .Path }}"
+stack_file="{{ .Path }}"
 if [ ! -f ${stack_file} ]; then
     printf "ERR - file not found ${stack_file}"
     exit 1
 fi
 
-eb -r --easystack {{ . }}
-if [[ "$?" -ne 0 ]]; then
-    printf "ERR - easybuild failed for ${stack_file}"
-	exit 1
-fi
-{{end}}
+eb --parallel="${EB_PARALLEL:-$(nproc)}" \
+{{- if $ebflags }}
+{{- range $ebflags }}
+    {{ . }} \
+{{- end }}
+{{- end }}
+    -r --easystack ${stack_file}
 
-if [[ "$?" -eq 0 ]]; then
-{{if .Publish}}
-    rgw_creds=$HOME/.config/rgw/sam.env
-    if [ ! -f ${rgw_creds} ]; then
-        echo "ERR - build_cmd.sh failed to publish, missing credentials ${rgw_creds}. more info: https://colab.tuwien.ac.at/spaces/VSC/pages/719914296/rgw+rados+gateway+cli"
-        exit 1
-    fi
-    source ${rgw_creds}
-    tb="$(crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }} | grep '^TARBALL=' | cut -d= -f2-)"
+eb_rc="$?"
+if [[ "$eb_rc" -ne 0 ]]; then
+    printf "ERR - easybuild failed for ${stack_file}\n"
+    # salvage the container /tmp (build dir, eb logs, shell command outputs) for post-mortem
+    cp -a /tmp/ {{ $logdir }}/ctr-tmp
+    exit 1
+fi
+{{- end }}
+
+ARGS="-EESSI-version {{ .SWSVariant }} -name {{ .Name }} --arch-subdir {{ .ArchSubdir }} --outputDir {{ .OutputDir }}"
+{{- if .AccelSubdir }}
+ARGS="${ARGS} --accel-subdir {{ .AccelSubdir }}"
+{{- end }}
+{{- if .Owner }}
+ARGS="${ARGS} --owner={{ .Owner }}"
+{{- end }}
+{{- if .Group }}
+ARGS="${ARGS} --group={{ .Group }}"
+{{- end }}
+
+if [[ "$eb_rc" == 0 ]]; then
+{{- if .Publish}}
+    # creds provisioned by the sbatch wrapper via APPTAINERENV_ forwarding
+    # (no creds file bind-mounted into the container)
+    tb="$(crtar ${ARGS} | grep '^TARBALL=' | cut -d= -f2-)"
     bn="$(basename "$tb")"
     (cd "$(dirname "$tb")" && sha256sum "$bn" > "$bn.sha256")
 {{- if .RGWEndpoint }}
     export AWS_ENDPOINT_URL={{ .RGWEndpoint }}
-{{ end }}    rgw object put {{ .RGWBucket }} "$bn" "$tb"
+{{- end }}
+    rgw object put {{ .RGWBucket }} "$bn" "$tb"
     # sentinel last: pullers only ingest pairs (default-deny)
     rgw object put {{ .RGWBucket }} "$bn.sha256" "$(dirname "$tb")/$bn.sha256"
-{{else}}
-    crtar -EESSI-version {{ .SWSVariant }} -name "{{ .Name }}" --arch-subdir {{ .ArchSubdir }}{{ if .AccelSubdir }} --accel-subdir {{ .AccelSubdir }}{{ end }} --outputDir {{ .OutputDir }}
-{{end}}
-else
-    cp -a /tmp/ {{ .Logdir }}/ctr-tmp
+{{- else }}
+    crtar ${ARGS}
+{{- end }}
 fi
-
