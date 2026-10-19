@@ -1,4 +1,4 @@
-VERSION := 0.2.0
+VERSION := $(shell git describe --tags --always --dirty)
 
 BUILDDIR = build
 
