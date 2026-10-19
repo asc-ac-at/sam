@@ -10,6 +10,7 @@ import (
 
 	"github.com/asc-ac-at/sam/internal/sami/cli/build"
 	"github.com/asc-ac-at/sam/internal/sami/cli/publish"
+	"github.com/asc-ac-at/sam/internal/sami/cli/rgwenv"
 	"github.com/asc-ac-at/sam/internal/sami/cli/shared"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +30,7 @@ Created for use at the Austrian Scientific Computing (ASC) Research Center.`,
 func Execute(opts *shared.Options, logger *slog.Logger) {
 	rootCmd.AddCommand(build.NewCommand(opts, logger))
 	rootCmd.AddCommand(publish.NewCommand(opts, logger))
+	rootCmd.AddCommand(rgwenv.NewCommand(opts, logger))
 
 	err := rootCmd.Execute()
 	if err != nil {
