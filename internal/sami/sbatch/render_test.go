@@ -123,7 +123,9 @@ func TestRenderScript_PublishForwardsRgwCreds(t *testing.T) {
 		`. "${rgw_creds}"`,
 		`export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"`,
 		`APPTAINERENV_AWS_CA_BUNDLE="/opt/rgw/tls-ca-bundle.pem"`,
-		"publish requested but rgw credentials file not found",
+		"publish requested but no rgw credentials",
+		"elif [ -f \"${rgw_creds}\" ]",                                              // env-lane fallback retained
+		`if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]`, // keks-lane presence gate
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("publish script missing %q\ngot:\n%s", want, s)

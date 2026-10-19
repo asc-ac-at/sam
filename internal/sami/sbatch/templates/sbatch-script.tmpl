@@ -12,17 +12,21 @@ done
 unset _eessi_tc_var
 
 {{ if .Publish }}# publish: provision rgw/S3 credentials for the containerized build_cmd.sh.
-# The creds file is sourced on the compute node (NFS home is visible there)
-# and the AWS chain is re-exported with the APPTAINERENV_ prefix, which
-# apptainer forwards even under --cleanenv (inner side sees plain AWS_*).
+# Two lanes (secrets are never written into this script):
+#   keks lane: sami resolved the pair at submit time on the login node;
+#              the values ride the job environment to the compute node.
+#   env lane : fall back to sourcing the creds file from NFS home here.
 rgw_creds="${HOME}/.config/rgw/sam.env"
-if [ ! -f "${rgw_creds}" ]; then
-    echo "ERR - publish requested but rgw credentials file not found: ${rgw_creds}" >&2
+if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+    : # pair arrived with the job environment (keks lane), nothing to source
+elif [ -f "${rgw_creds}" ]; then
+    set -a
+    . "${rgw_creds}"
+    set +a
+else
+    echo "ERR - publish requested but no rgw credentials: job environment carries no AWS pair and creds file not found: ${rgw_creds}" >&2
     exit 1
 fi
-set -a
-. "${rgw_creds}"
-set +a
 export APPTAINERENV_AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
 export APPTAINERENV_AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
 [ -n "${AWS_SESSION_TOKEN}" ] && export APPTAINERENV_AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN}"
