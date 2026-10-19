@@ -13,19 +13,19 @@ EXE = $(SAMI) $(SAMCTR) $(SAMGX) $(CRTAR) $(RGW)
 all: $(EXE)
 
 $(SAMI):
-	go build -ldflags "-X 'github.com/asc-ac-at/sam/pkg/cmd/sami.version=v$(VERSION)'" -o $@ ./cmd/sami
+	go build -ldflags "-X 'github.com/asc-ac-at/sam/pkg/cmd/sami.version=$(VERSION)'" -o $@ ./cmd/sami
 
 $(SAMCTR):
-	go build -ldflags "-X 'github.com/asc-ac-at/sam/pkg/cmd/samctr.version=v$(VERSION)'" -o $@ ./cmd/samctr
+	go build -ldflags "-X 'github.com/asc-ac-at/sam/pkg/cmd/samctr.version=$(VERSION)'" -o $@ ./cmd/samctr
 
 $(SAMGX):
-	go build -ldflags "-X 'main.Version=v$(VERSION)'" -o $@ ./cmd/samgx
+	go build -ldflags "-X 'main.Version=$(VERSION)'" -o $@ ./cmd/samgx
 
 $(CRTAR):
-	go build -ldflags "-X 'main.Version=v$(VERSION)'" -o $@ ./cmd/crtar
+	go build -ldflags "-X 'main.Version=$(VERSION)'" -o $@ ./cmd/crtar
 
 $(RGW):
-	go build -ldflags "-X 'main.Version=v$(VERSION)'" -o $@ ./cmd/rgw
+	go build -ldflags "-X 'main.Version=$(VERSION)'" -o $@ ./cmd/rgw
 
 
 .PHONY: clean
