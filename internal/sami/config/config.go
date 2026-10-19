@@ -24,8 +24,39 @@ type File struct {
 // container falls back to the APPTAINERENV_AWS_ENDPOINT_URL variable
 // forwarded from the compute node's environment.
 type RGWConfig struct {
-	Bucket   string `yaml:"bucket"`
-	Endpoint string `yaml:"endpoint"`
+	Bucket      string            `yaml:"bucket"`
+	Endpoint    string            `yaml:"endpoint"`
+	Region      string            `yaml:"region"`
+	Credentials CredentialsConfig `yaml:"credentials"`
+}
+
+// CredentialsConfig selects how the AWS credential pair is provisioned for
+// publish paths (the ladder law of the rgw-credential-simplification design):
+//
+//   - backend "env" (the zero value/default): the file lane — a prepared
+//     environment or the site's sam.env file, never resolved by sami.
+//   - backend "keks": the keks lane — sami resolves the pair via the
+//     external keks binary at submit/publish time; refs below may override
+//     the estate defaults (creds.DefaultAccessKeyRef); an empty backend
+//     spelled with refs is meaningless and refused.
+type CredentialsConfig struct {
+	Backend      string `yaml:"backend"`
+	AccessKeyRef string `yaml:"access-key-ref"`
+	SecretKeyRef string `yaml:"secret-key-ref"`
+}
+
+// KeksBackend reports whether the keks lane is selected. Empty backend is
+// env (the default lane); anything spelled that is neither env nor keks
+// is a config error (loud, never a silent downgrade).
+func (c CredentialsConfig) KeksBackend() (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(c.Backend)) {
+	case "", "env":
+		return false, nil
+	case "keks":
+		return true, nil
+	default:
+		return false, fmt.Errorf("unknown rgw.credentials.backend %q (valid: env, keks)", c.Backend)
+	}
 }
 
 // SimpleConfig represents minimal configuration structure
