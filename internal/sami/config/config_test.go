@@ -48,6 +48,11 @@ arch-mapping:
 rgw:
   bucket: sam-archives
   endpoint: https://rgw.example.org
+  region: default
+  credentials:
+    backend: keks
+    access-key-ref: ref+vault://vault/deployment/rgw/sam#access_key
+    secret-key-ref: ref+vault://vault/deployment/rgw/sam#secret_key
 `
 
 // loadFromYAML writes yaml to a temp file and loads it through LoadSbatchConfig,
@@ -98,6 +103,50 @@ func TestLoadSbatchConfig_Canonical(t *testing.T) {
 	}
 	if f.RGW.Endpoint != "https://rgw.example.org" {
 		t.Errorf("RGW.Endpoint = %q, want https://rgw.example.org", f.RGW.Endpoint)
+	}
+}
+
+func TestLoadSbatchConfig_RgwCredentials(t *testing.T) {
+	f := loadFromYAML(t, canonicalYAML)
+
+	if f.RGW.Region != "default" {
+		t.Errorf("RGW.Region = %q, want default", f.RGW.Region)
+	}
+	creds := f.RGW.Credentials
+	keks, err := creds.KeksBackend()
+	if err != nil {
+		t.Fatalf("KeksBackend: %v", err)
+	}
+	if !keks {
+		t.Error("KeksBackend = false, want true for backend: keks")
+	}
+	if creds.AccessKeyRef != "ref+vault://vault/deployment/rgw/sam#access_key" {
+		t.Errorf("AccessKeyRef = %q", creds.AccessKeyRef)
+	}
+	if creds.SecretKeyRef != "ref+vault://vault/deployment/rgw/sam#secret_key" {
+		t.Errorf("SecretKeyRef = %q", creds.SecretKeyRef)
+	}
+}
+
+func TestCredentialsConfig_BackendLanes(t *testing.T) {
+	for _, tc := range []struct {
+		backend  string
+		wantKeks bool
+		wantErr  bool
+	}{
+		{"", false, false}, // zero value: env lane
+		{"env", false, false},
+		{"keks", true, false},
+		{"KEKS", true, false},  // case tolerant
+		{"vault", false, true}, // loud refusal, never a downgrade
+	} {
+		keks, err := CredentialsConfig{Backend: tc.backend}.KeksBackend()
+		if (err != nil) != tc.wantErr {
+			t.Errorf("backend %q: err = %v, wantErr %v", tc.backend, err, tc.wantErr)
+		}
+		if keks != tc.wantKeks {
+			t.Errorf("backend %q: keks = %v, want %v", tc.backend, keks, tc.wantKeks)
+		}
 	}
 }
 

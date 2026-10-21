@@ -15,6 +15,7 @@ import (
 	"github.com/asc-ac-at/sam/internal/rgw/client"
 	"github.com/asc-ac-at/sam/internal/sami/cli/shared"
 	"github.com/asc-ac-at/sam/internal/sami/config"
+	"github.com/asc-ac-at/sam/internal/sami/creds"
 )
 
 var publishExample = `
@@ -96,6 +97,24 @@ Configuration for the rados gateway come from the prepared environment.`,
 			if endpoint != "" {
 				if err := os.Setenv("AWS_ENDPOINT_URL", endpoint); err != nil {
 					return fmt.Errorf("setting AWS_ENDPOINT_URL: %w", err)
+				}
+			}
+
+			// C-host gap-fill: on the keks lane, resolve the credential
+			// pair now; a prepared environment always wins. A dead papiere
+			// session refuses before any upload attempt, carrying keks'
+			// login hint verbatim.
+			if cfg != nil {
+				keks, err := cfg.RGW.Credentials.KeksBackend()
+				if err != nil {
+					return err
+				}
+				if keks {
+					c := cfg.RGW.Credentials
+					if err := creds.FillMissingEnv(creds.KeksResolver{}, c.AccessKeyRef, c.SecretKeyRef); err != nil {
+						return fmt.Errorf("keks backend: %w", err)
+					}
+					logger.Debug("rgw credentials resolved via keks")
 				}
 			}
 
