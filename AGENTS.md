@@ -58,3 +58,15 @@ four tools: sami (builds), samctr (containers), crtar (tarballs), rgw
 - Related repos: asc-software-layer, asc-software-layer-scripts
   (gitlab.tuwien.ac.at/vsc/software-stacks).
 - More broadly related: <github.com/EESSI> software-layer, software-layer-scripts
+
+## Go Coding Style
+
+In general, we want to use the style guide [effective go](https://go.dev/doc/effective_go).
+
+### Comments
+
+Use the specific guide for Go outlined at <https://go.dev/doc/effective_go#commentary>
+
+Otherwise, follow the general rules about the content of comments as
+outlined in Chapter 1, Section 1.6 of The Practice of Programming by
+Brian Kernighan and Rob Pike. Consult your own copy of the book.
